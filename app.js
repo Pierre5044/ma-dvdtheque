@@ -19,7 +19,7 @@ function deleteMovie(id){return new Promise((resolve,reject)=>{const tx=db.trans
 function replaceAll(list){return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite"),s=tx.objectStore(STORE);s.clear();list.forEach(m=>s.put(m));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
 function settings(){return {key:localStorage.getItem("tmdbKey")||"",name:localStorage.getItem("collectionName")||"Ma DVDthèque"}}
 function normalizeGenres(value){return [...new Set(String(value||"").split(",").map(x=>x.trim()).filter(Boolean))]}
-function normalizeMovie(m){return {id:m.id||uid(),title:String(m.title||"Sans titre"),year:m.year||"",director:m.director||"",genres:Array.isArray(m.genres)?m.genres:normalizeGenres(m.genres),barcode:m.barcode||"",poster:m.poster||"",notes:m.notes||"",loaned:!!m.loaned,borrowerFirst:m.borrowerFirst||"",borrowerLast:m.borrowerLast||"",loanDate:m.loanDate||"",loanHistory:Array.isArray(m.loanHistory)?m.loanHistory:[],addedAt:m.addedAt||new Date().toISOString(),tmdbId:m.tmdbId||""}}
+function normalizeMovie(m){return {id:m.id||uid(),title:String(m.title||"Sans titre"),year:m.year||"",director:m.director||"",genres:Array.isArray(m.genres)?m.genres:normalizeGenres(m.genres),barcode:m.barcode||"",poster:m.poster||"",notes:m.notes||"",overview:m.overview||"",runtime:m.runtime||"",loaned:!!m.loaned,borrowerFirst:m.borrowerFirst||"",borrowerLast:m.borrowerLast||"",loanDate:m.loanDate||"",loanHistory:Array.isArray(m.loanHistory)?m.loanHistory:[],addedAt:m.addedAt||new Date().toISOString(),tmdbId:m.tmdbId||""}}
 function movieMatches(m,q){const hay=[m.title,m.year,m.director,...m.genres,m.barcode,m.borrowerFirst,m.borrowerLast,m.notes].join(" ").toLocaleLowerCase("fr");return hay.includes(q.toLocaleLowerCase("fr"))}
 function render(){
  const q=$("searchInput").value.trim(),genre=$("genreFilter").value,status=$("statusFilter").value,sort=$("sortSelect").value;
@@ -45,7 +45,7 @@ function render(){
 async function refresh(){movies=(await allMovies()).map(normalizeMovie);render()}
 function formMovie(m={}){
  $("movieId").value=m.id||"";$("movieTitle").value=m.title||"";$("movieYear").value=m.year||"";$("movieDirector").value=m.director||"";
- $("movieGenres").value=(m.genres||[]).join(", ");$("movieBarcode").value=m.barcode||"";$("moviePoster").value=m.poster||"";$("movieNotes").value=m.notes||"";
+ $("movieGenres").value=(m.genres||[]).join(", ");$("movieBarcode").value=m.barcode||"";$("moviePoster").value=m.poster||"";$("movieNotes").value=m.notes||"";$("movieOverview").value=m.overview||"";
  $("movieLoaned").checked=!!m.loaned;$("borrowerFirst").value=m.borrowerFirst||"";$("borrowerLast").value=m.borrowerLast||"";$("loanDate").value=m.loanDate||dateToday();
  $("loanFields").classList.toggle("hidden",!m.loaned);$("formTitle").textContent=m.id?"Modifier le DVD":"Ajouter un film";$("formEyebrow").textContent=m.id?"MA COLLECTION":"NOUVEAU DVD";$("formMessage").textContent="";
  openDialog($("movieDialog"));
@@ -59,14 +59,15 @@ function buildMovieFromForm(){
  if(loaned&&old?.loaned&&(old.borrowerFirst!==first||old.borrowerLast!==last||old.loanDate!==date)){
   history=[...history,{borrowerFirst:old.borrowerFirst,borrowerLast:old.borrowerLast,loanDate:old.loanDate,returnedAt:dateToday(),note:"Prêt modifié"}];
  }
- return normalizeMovie({...(old||{}),id:old?.id||uid(),title:$("movieTitle").value.trim(),year:$("movieYear").value,director:$("movieDirector").value.trim(),genres:normalizeGenres($("movieGenres").value),barcode:$("movieBarcode").value.trim(),poster:$("moviePoster").value.trim(),notes:$("movieNotes").value.trim(),loaned,borrowerFirst:loaned?first:"",borrowerLast:loaned?last:"",loanDate:loaned?date:"",loanHistory:history,addedAt:old?.addedAt||new Date().toISOString()})
+ return normalizeMovie({...(old||{}),id:old?.id||uid(),title:$("movieTitle").value.trim(),year:$("movieYear").value,director:$("movieDirector").value.trim(),genres:normalizeGenres($("movieGenres").value),barcode:$("movieBarcode").value.trim(),poster:$("moviePoster").value.trim(),notes:$("movieNotes").value.trim(),overview:$("movieOverview").value.trim(),loaned,borrowerFirst:loaned?first:"",borrowerLast:loaned?last:"",loanDate:loaned?date:"",loanHistory:history,addedAt:old?.addedAt||new Date().toISOString()})
 }
 async function submitMovie(e){e.preventDefault();const m=buildMovieFromForm();if(!m)return;await saveMovie(m);closeDialog($("movieDialog"));await refresh();toast("DVD enregistré");}
-function showDetails(id){
+async function showDetails(id){
  const m=movies.find(x=>x.id===id);if(!m)return;
  $("detailsContent").innerHTML=`<div class="dialog-head"><div><p class="eyebrow">FICHE DVD</p><h2>Détails du film</h2></div><button type="button" class="icon-button close-dialog" aria-label="Fermer">×</button></div>
  <div class="detail-hero">${m.poster?`<img src="${esc(m.poster)}" alt="Affiche">`:'<div class="poster-placeholder">🎬</div>'}<div><h2>${esc(m.title)}</h2><div class="muted">${esc(m.year||"Année inconnue")}</div><p class="detail-info">${esc(m.director||"Réalisateur non renseigné")}</p>${m.loaned?'<span class="loan-badge">PRÊTÉ</span>':'<span class="chip">Disponible</span>'}</div></div>
  <p class="detail-label">GENRES</p><div class="card-genres">${m.genres.length?m.genres.map(g=>`<span class="chip">${esc(g)}</span>`).join(""):'<span class="muted">Non renseigné</span>'}</div>
+ ${m.overview?`<p class="detail-label">RÉSUMÉ</p><p class="detail-info overview-text">${esc(m.overview)}</p>`:'<p class="detail-label">RÉSUMÉ</p><p class="detail-info muted" id="overviewLoading">Résumé non disponible pour ce film.</p>'}
  ${m.barcode?`<p class="detail-label">CODE-BARRES</p><p class="detail-info">${esc(m.barcode)}</p>`:""}
  ${m.loaned?`<p class="detail-label">PRÊT EN COURS</p><p class="detail-info"><strong>${esc(m.borrowerFirst)} ${esc(m.borrowerLast)}</strong><br>Depuis le ${esc(m.loanDate||"date inconnue")}</p>`:""}
  ${m.notes?`<p class="detail-label">NOTES</p><p class="detail-info">${esc(m.notes)}</p>`:""}
@@ -78,6 +79,17 @@ function showDetails(id){
  const loanBtn=$("returnMovieBtn")||$("loanMovieBtn");
  loanBtn.onclick=async()=>{closeDialog($("detailsDialog"));if(m.loaned){const updated={...m,loaned:false,loanHistory:[...m.loanHistory,{borrowerFirst:m.borrowerFirst,borrowerLast:m.borrowerLast,loanDate:m.loanDate,returnedAt:dateToday()}],borrowerFirst:"",borrowerLast:"",loanDate:""};await saveMovie(updated);await refresh();toast("DVD marqué comme rendu")}else formMovie({...m,loaned:true,loanDate:dateToday()})};
  openDialog($("detailsDialog"));
+ // Les DVD ajoutés avant cette amélioration récupèrent leur résumé à la première ouverture.
+ if(m.tmdbId&&!m.overview){
+  const loading=$("detailsContent").querySelector("#overviewLoading");
+  if(loading)loading.textContent="Récupération du résumé…";
+  try{
+   const detail=await getTMDB(`movie/${m.tmdbId}`);
+   const updated=normalizeMovie({...m,overview:detail.overview||"",runtime:detail.runtime||m.runtime||"",genres:m.genres.length?m.genres:(detail.genres||[]).map(g=>g.name)});
+   await saveMovie(updated);await refresh();
+   if($("detailsDialog").open)showDetails(id);
+  }catch(e){if(loading)loading.textContent="Résumé indisponible. Vérifie la connexion et la clé API dans Paramètres.";}
+ }
 }
 async function getTMDB(path,params={}){
  const key=settings().key;if(!key)throw new Error("Configure d’abord ta clé API TMDB dans les paramètres ⚙.");
@@ -98,8 +110,8 @@ async function selectTMDB(r){
  let director="";
  try{const credits=await getTMDB(`movie/${r.id}/credits`);director=(credits.crew||[]).find(p=>p.job==="Director")?.name||""}catch(_){}
  const poster=r.poster_path?"https://image.tmdb.org/t/p/w500"+r.poster_path:"";
- const m={title:r.title||r.original_title||"",year:(r.release_date||"").slice(0,4),director,genres:[],poster,tmdbId:r.id};
- try{const detail=await getTMDB(`movie/${r.id}`);m.genres=(detail.genres||[]).map(g=>g.name)}catch(_){}
+ const m={title:r.title||r.original_title||"",year:(r.release_date||"").slice(0,4),director,genres:[],poster,overview:r.overview||"",tmdbId:r.id};
+ try{const detail=await getTMDB(`movie/${r.id}`);m.genres=(detail.genres||[]).map(g=>g.name);m.overview=detail.overview||m.overview;m.runtime=detail.runtime||""}catch(_){}
  closeDialog($("searchDialog"));formMovie(m);
 }
 async function openSearch(){ $("tmdbQuery").value="";$("tmdbResults").innerHTML="";$("tmdbMessage").textContent="";openDialog($("searchDialog"));setTimeout(()=>$("tmdbQuery").focus(),100)}
