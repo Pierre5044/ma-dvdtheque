@@ -4,6 +4,7 @@
 const DB_NAME="ma-dvdtheque-db", DB_VERSION=1, STORE="movies";
 const $=id=>document.getElementById(id);
 let db, movies=[], currentView="collection", stream=null, scanTimer=null, scanBusy=false, formTmdbId="";
+let pendingBarcode="", barcodeLookupActive=false;
 const defaultGenres=["Action","Aventure","Animation","Biopic","Comédie","Drame","Fantastique","Guerre","Historique","Horreur","Policier","Romance","Science-fiction","Thriller","Western","Documentaire","Famille","Musical"];
 const dialogs=["movieDialog","searchDialog","scanDialog","detailsDialog","settingsDialog","backupDialog"].map($);
 function openDialog(d){if(!d.open)d.showModal()}
@@ -17,7 +18,7 @@ function allMovies(){return new Promise((resolve,reject)=>{const req=db.transact
 function saveMovie(movie){return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(movie);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
 function deleteMovie(id){return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
 function replaceAll(list){return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite"),s=tx.objectStore(STORE);s.clear();list.forEach(m=>s.put(m));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
-function settings(){return {key:localStorage.getItem("tmdbKey")||"",name:localStorage.getItem("collectionName")||"Ma DVDthèque"}}
+function settings(){return {key:localStorage.getItem("tmdbKey")||"",name:localStorage.getItem("collectionName")||"Les Films de Pitou"}}
 function normalizeGenres(value){return [...new Set(String(value||"").split(",").map(x=>x.trim()).filter(Boolean))]}
 function normalizeMovie(m){return {id:m.id||uid(),title:String(m.title||"Sans titre"),year:m.year||"",director:m.director||"",genres:Array.isArray(m.genres)?m.genres:normalizeGenres(m.genres),barcode:m.barcode||"",poster:m.poster||"",notes:m.notes||"",overview:m.overview||"",runtime:m.runtime||"",loaned:!!m.loaned,borrowerFirst:m.borrowerFirst||"",borrowerLast:m.borrowerLast||"",loanDate:m.loanDate||"",loanHistory:Array.isArray(m.loanHistory)?m.loanHistory:[],addedAt:m.addedAt||new Date().toISOString(),tmdbId:m.tmdbId||""}}
 function movieMatches(m,q){const hay=[m.title,m.year,m.director,...m.genres,m.barcode,m.borrowerFirst,m.borrowerLast,m.notes].join(" ").toLocaleLowerCase("fr");return hay.includes(q.toLocaleLowerCase("fr"))}
@@ -186,11 +187,78 @@ async function selectTMDB(r){
  let director="";
  try{const credits=await getTMDB(`movie/${r.id}/credits`);director=(credits.crew||[]).find(p=>p.job==="Director")?.name||""}catch(_){}
  const poster=r.poster_path?"https://image.tmdb.org/t/p/w500"+r.poster_path:"";
- const m={title:r.title||r.original_title||"",year:(r.release_date||"").slice(0,4),director,genres:[],poster,overview:r.overview||"",tmdbId:r.id};
+ const m={barcode:pendingBarcode,title:r.title||r.original_title||"",year:(r.release_date||"").slice(0,4),director,genres:[],poster,overview:r.overview||"",tmdbId:r.id};
  try{const detail=await getTMDB(`movie/${r.id}`);m.genres=(detail.genres||[]).map(g=>g.name);m.overview=detail.overview||m.overview;m.runtime=detail.runtime||""}catch(_){}
- closeDialog($("searchDialog"));formMovie(m);
+ closeDialog($("searchDialog"));formMovie(m);pendingBarcode="";
 }
-async function openSearch(){ $("tmdbQuery").value="";$("tmdbResults").innerHTML="";$("tmdbMessage").textContent="";openDialog($("searchDialog"));setTimeout(()=>$("tmdbQuery").focus(),100)}
+async function openSearch(){ pendingBarcode="";$("tmdbQuery").value="";$("tmdbResults").innerHTML="";$("tmdbMessage").textContent="";openDialog($("searchDialog"));setTimeout(()=>$("tmdbQuery").focus(),100)}
+function validEAN13(code){
+ if(!/^\\d{13}$/.test(code))return true; // Certains scanners lisent aussi UPC-A ou EAN-8.
+ const digits=code.split("").map(Number);
+ const sum=digits.slice(0,12).reduce((total,n,i)=>total+n*(i%2===0?1:3),0);
+ return (10-sum%10)%10===digits[12];
+}
+function cleanProductTitle(title){
+ return String(title||"").replace(/\\b(dvd|blu[ -]?ray|édition|edition|collector|zone\\s*2|pal|format|coffret)\\b/gi," ")
+ .replace(/\\([^)]*(dvd|blu-ray|zone|pal)[^)]*\\)/gi," ").replace(/[|_]+/g," ").replace(/\\s+/g," ").trim();
+}
+async function fetchJsonTimeout(url,ms=8500){
+ const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),ms);
+ try{const response=await fetch(url,{signal:controller.signal,headers:{Accept:"application/json"}});
+ if(response.status===404)return null;
+ if(response.status===429)throw new Error("Limite temporaire de la base de codes-barres atteinte.");
+ if(!response.ok)throw new Error("Service indisponible ("+response.status+").");
+ return response.json();
+ }finally{clearTimeout(timeout)}
+}
+async function lookupBarcodeTitle(code){
+ // UPCitemdb : formule publique gratuite sans clé ; sa couverture des DVD est variable.
+ let lastError="";
+ try{
+  const data=await fetchJsonTimeout("https://api.upcitemdb.com/prod/trial/lookup?upc="+encodeURIComponent(code));
+  const item=(data?.items||[]).find(x=>x.title);
+  if(item)return {title:cleanProductTitle(item.title),source:"UPCitemdb"};
+ }catch(e){lastError=e.message}
+ // Base collaborative libre : une seconde chance pour les codes absents.
+ try{
+  const data=await fetchJsonTimeout("https://world.openproductsfacts.org/api/v2/product/"+encodeURIComponent(code)+".json?fields=product_name,product_name_fr");
+  const title=data?.product?.product_name_fr||data?.product?.product_name;
+  if(title)return {title:cleanProductTitle(title),source:"Open Products Facts"};
+ }catch(e){lastError=lastError||e.message}
+ return {title:"",error:lastError};
+}
+async function handleBarcode(code){
+ code=String(code||"").replace(/\\s/g,"");
+ if(barcodeLookupActive)return;
+ if(!validEAN13(code)){ $("scanStatus").textContent="Ce code EAN-13 semble mal lu. Réessaie le scan.";return}
+ barcodeLookupActive=true;pendingBarcode=code;
+ stopScanner();closeDialog($("scanDialog"));
+ // Une édition connue dans la collection ne nécessite pas de recherche externe.
+ const existing=movies.find(m=>String(m.barcode||"")===code);
+ if(existing){
+  const again=confirm("Ce code-barres existe déjà dans ta collection : "+existing.title+".\\n\\nAjouter tout de même un nouvel exemplaire ?");
+  if(!again){barcodeLookupActive=false;return}
+  formMovie({...existing,id:"",barcode:code,loaned:false,borrowerFirst:"",borrowerLast:"",loanHistory:[]});
+  barcodeLookupActive=false;return;
+ }
+ const editing=$("movieDialog").open;
+ if(editing){$("movieBarcode").value=code;$("formMessage").textContent="Recherche automatique du DVD en cours…"}
+ else{openDialog($("searchDialog"));}
+ if(!editing){$("tmdbMessage").textContent="Recherche du DVD par son code-barres…";$("tmdbResults").innerHTML=""}
+ const product=await lookupBarcodeTitle(code);
+ barcodeLookupActive=false;
+ if(product.title){
+  if(editing)closeDialog($("movieDialog"));
+  openDialog($("searchDialog"));
+  $("tmdbQuery").value=product.title;
+  $("tmdbMessage").textContent="Code-barres reconnu via "+product.source+". Recherche du film sur TMDB…";
+  await searchTMDB(product.title);
+  // Le code-barres reste associé au film sélectionné dans les résultats TMDB.
+ }else{
+  if(editing){$("formMessage").textContent="Code-barres enregistré, mais aucun titre trouvé automatiquement."}
+  else{$("tmdbMessage").textContent="Code-barres non trouvé dans les bases gratuites. Recherche par titre possible ci-dessous."+ (product.error?" ("+product.error+")":"")}
+ }
+}
 async function startScanner(){
  openDialog($("scanDialog"));$("scanStatus").textContent="";$("manualBarcode").value="";
  if(!navigator.mediaDevices?.getUserMedia){$("scanStatus").textContent="La caméra n’est pas disponible ici. Saisis le code-barres manuellement.";return}
@@ -200,17 +268,16 @@ async function startScanner(){
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
   const video=$("scanVideo");video.srcObject=stream;await video.play();$("scanStatus").textContent="Place le code-barres dans le cadre de la caméra.";
   scanBusy=false;clearInterval(scanTimer);
-  scanTimer=setInterval(async()=>{if(scanBusy||!video.videoWidth)return;scanBusy=true;try{const codes=await detector.detect(video);if(codes.length){const code=codes[0].rawValue;$("movieBarcode").value=code;$("manualBarcode").value=code;stopScanner();$("scanStatus").textContent="Code détecté : "+code;toast("Code-barres lu");if($("movieDialog").open){}else{closeDialog($("scanDialog"));formMovie({barcode:code})}}}catch(e){}finally{scanBusy=false}},350);
+  scanTimer=setInterval(async()=>{if(scanBusy||!video.videoWidth)return;scanBusy=true;try{const codes=await detector.detect(video);if(codes.length){const code=codes[0].rawValue;$("manualBarcode").value=code;stopScanner();await handleBarcode(code)}}catch(e){$("scanStatus").textContent="Erreur pendant la recherche : "+e.message}finally{scanBusy=false}},350);
  }catch(e){$("scanStatus").textContent="Impossible d’accéder à la caméra. Vérifie l’autorisation ou saisis le numéro manuellement."}
 }
 function stopScanner(){clearInterval(scanTimer);scanTimer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$("scanVideo").srcObject=null}
-function useManualBarcode(){
+async function useManualBarcode(){
  const code=$("manualBarcode").value.trim();if(!code){$("scanStatus").textContent="Saisis un numéro de code-barres.";return}
- $("movieBarcode").value=code;stopScanner();closeDialog($("scanDialog"));
- if($("movieDialog").open){$("movieBarcode").value=code}else formMovie({barcode:code});
+ await handleBarcode(code);
 }
 function exportBackup(){
- const payload={app:"Ma DVDthèque",version:1,exportedAt:new Date().toISOString(),movies};
+ const payload={app:"Les Films de Pitou",version:1,exportedAt:new Date().toISOString(),movies};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`ma-dvdtheque-${dateToday()}.json`;a.click();URL.revokeObjectURL(url);
  $("backupMessage").textContent=`Sauvegarde exportée (${movies.length} DVD). Conserve ce fichier dans un endroit sûr.`;
@@ -237,14 +304,17 @@ function wire(){
  $("scanFromForm").onclick=()=>startScanner();
  $("searchForm").addEventListener("submit",e=>{e.preventDefault();if($("tmdbQuery").value.trim())searchTMDB($("tmdbQuery").value.trim())});
  $("settingsBtn").onclick=()=>{const s=settings();$("tmdbKey").value=s.key;$("collectionName").value=s.name;openDialog($("settingsDialog"))};
- $("settingsForm").addEventListener("submit",e=>{e.preventDefault();localStorage.setItem("tmdbKey",$("tmdbKey").value.trim());localStorage.setItem("collectionName",$("collectionName").value.trim()||"Ma DVDthèque");document.querySelector(".brand h1").textContent=localStorage.getItem("collectionName");closeDialog($("settingsDialog"));toast("Paramètres enregistrés")});
+ $("settingsForm").addEventListener("submit",e=>{e.preventDefault();localStorage.setItem("tmdbKey",$("tmdbKey").value.trim());localStorage.setItem("collectionName",$("collectionName").value.trim()||"Les Films de Pitou");document.querySelector(".brand h1").textContent=localStorage.getItem("collectionName");closeDialog($("settingsDialog"));toast("Paramètres enregistrés")});
  $("navBackup").onclick=()=>{$("backupMessage").textContent="";openDialog($("backupDialog"))};
  $("exportBtn").onclick=exportBackup;$("importFile").addEventListener("change",e=>{const f=e.target.files?.[0];if(f)importBackup(f)});
  $("useManualBarcode").onclick=useManualBarcode;$("stopScan").onclick=()=>{stopScanner();closeDialog($("scanDialog"))};
  dialogs.forEach(d=>{d.addEventListener("click",e=>{if(e.target===d)closeDialog(d)});d.querySelectorAll?.(".close-dialog").forEach(b=>b.addEventListener("click",()=>{if(d.id==="scanDialog")stopScanner();closeDialog(d)}));d.addEventListener("close",()=>{if(d.id==="scanDialog")stopScanner()})});
 }
 async function init(){
- try{db=await openDB();wire();document.querySelector(".brand h1").textContent=settings().name;await refresh();if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});}
+ try{
+ const previousName=localStorage.getItem("collectionName");
+ if(!previousName||previousName==="Ma DVDthèque")localStorage.setItem("collectionName","Les Films de Pitou");
+ db=await openDB();wire();document.querySelector(".brand h1").textContent=settings().name;await refresh();if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});}
  catch(e){alert("Impossible d’ouvrir la base de données locale. Essaie avec Chrome en mode normal.");console.error(e)}
 }
 document.addEventListener("DOMContentLoaded",init);

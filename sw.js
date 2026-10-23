@@ -1,5 +1,5 @@
-const CACHE="ma-dvdtheque-shell-v6";
-const SHELL=["./","./index.html","./styles.css","./app.js?v=6","./manifest.json","./icon.svg"];
+const CACHE="ma-dvdtheque-shell-v7";
+const SHELL=["./","./index.html","./styles.css","./app.js?v=7","./manifest.json?v=7","./icon.svg"];
 self.addEventListener("install",event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener("activate",event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener("fetch",event=>{
