@@ -3,7 +3,7 @@
 "use strict";
 const DB_NAME="ma-dvdtheque-db", DB_VERSION=1, STORE="movies";
 const $=id=>document.getElementById(id);
-let db, movies=[], currentView="collection", stream=null, scanTimer=null, scanBusy=false;
+let db, movies=[], currentView="collection", stream=null, scanTimer=null, scanBusy=false, formTmdbId="";
 const defaultGenres=["Action","Aventure","Animation","Biopic","Comédie","Drame","Fantastique","Guerre","Historique","Horreur","Policier","Romance","Science-fiction","Thriller","Western","Documentaire","Famille","Musical"];
 const dialogs=["movieDialog","searchDialog","scanDialog","detailsDialog","settingsDialog","backupDialog"].map($);
 function openDialog(d){if(!d.open)d.showModal()}
@@ -44,6 +44,7 @@ function render(){
 }
 async function refresh(){movies=(await allMovies()).map(normalizeMovie);render()}
 function formMovie(m={}){
+ formTmdbId=m.tmdbId||"";
  $("movieId").value=m.id||"";$("movieTitle").value=m.title||"";$("movieYear").value=m.year||"";$("movieDirector").value=m.director||"";
  $("movieGenres").value=(m.genres||[]).join(", ");$("movieBarcode").value=m.barcode||"";$("moviePoster").value=m.poster||"";$("movieNotes").value=m.notes||"";$("movieOverview").value=m.overview||"";
  $("movieLoaned").checked=!!m.loaned;$("borrowerFirst").value=m.borrowerFirst||"";$("borrowerLast").value=m.borrowerLast||"";$("loanDate").value=m.loanDate||dateToday();
@@ -59,7 +60,7 @@ function buildMovieFromForm(){
  if(loaned&&old?.loaned&&(old.borrowerFirst!==first||old.borrowerLast!==last||old.loanDate!==date)){
   history=[...history,{borrowerFirst:old.borrowerFirst,borrowerLast:old.borrowerLast,loanDate:old.loanDate,returnedAt:dateToday(),note:"Prêt modifié"}];
  }
- return normalizeMovie({...(old||{}),id:old?.id||uid(),title:$("movieTitle").value.trim(),year:$("movieYear").value,director:$("movieDirector").value.trim(),genres:normalizeGenres($("movieGenres").value),barcode:$("movieBarcode").value.trim(),poster:$("moviePoster").value.trim(),notes:$("movieNotes").value.trim(),overview:$("movieOverview").value.trim(),loaned,borrowerFirst:loaned?first:"",borrowerLast:loaned?last:"",loanDate:loaned?date:"",loanHistory:history,addedAt:old?.addedAt||new Date().toISOString()})
+ return normalizeMovie({...(old||{}),id:old?.id||uid(),title:$("movieTitle").value.trim(),year:$("movieYear").value,director:$("movieDirector").value.trim(),genres:normalizeGenres($("movieGenres").value),barcode:$("movieBarcode").value.trim(),poster:$("moviePoster").value.trim(),notes:$("movieNotes").value.trim(),overview:$("movieOverview").value.trim(),tmdbId:old?.tmdbId||formTmdbId,loaned,borrowerFirst:loaned?first:"",borrowerLast:loaned?last:"",loanDate:loaned?date:"",loanHistory:history,addedAt:old?.addedAt||new Date().toISOString()})
 }
 async function submitMovie(e){e.preventDefault();const m=buildMovieFromForm();if(!m)return;await saveMovie(m);closeDialog($("movieDialog"));await refresh();toast("DVD enregistré");}
 async function showDetails(id){
@@ -68,7 +69,7 @@ async function showDetails(id){
  <div class="detail-hero">${m.poster?`<img src="${esc(m.poster)}" alt="Affiche">`:'<div class="poster-placeholder">🎬</div>'}<div><h2>${esc(m.title)}</h2><div class="muted">${esc(m.year||"Année inconnue")}</div><p class="detail-info">${esc(m.director||"Réalisateur non renseigné")}</p>${m.loaned?'<span class="loan-badge">PRÊTÉ</span>':'<span class="chip">Disponible</span>'}</div></div>
  <p class="detail-label">GENRES</p><div class="card-genres">${m.genres.length?m.genres.map(g=>`<span class="chip">${esc(g)}</span>`).join(""):'<span class="muted">Non renseigné</span>'}</div>
  ${m.overview?`<p class="detail-label">RÉSUMÉ</p><p class="detail-info overview-text">${esc(m.overview)}</p>`:'<p class="detail-label">RÉSUMÉ</p><p class="detail-info muted" id="overviewLoading">Résumé non disponible pour ce film.</p>'}
- ${m.tmdbId?`<div id="trailerArea" class="trailer-area" aria-live="polite"></div>`:""}
+ <div id="trailerArea" class="trailer-area" aria-live="polite">Recherche de la bande-annonce…</div>
  ${m.barcode?`<p class="detail-label">CODE-BARRES</p><p class="detail-info">${esc(m.barcode)}</p>`:""}
  ${m.loaned?`<p class="detail-label">PRÊT EN COURS</p><p class="detail-info"><strong>${esc(m.borrowerFirst)} ${esc(m.borrowerLast)}</strong><br>Depuis le ${esc(m.loanDate||"date inconnue")}</p>`:""}
  ${m.notes?`<p class="detail-label">NOTES</p><p class="detail-info">${esc(m.notes)}</p>`:""}
@@ -80,7 +81,7 @@ async function showDetails(id){
  const loanBtn=$("returnMovieBtn")||$("loanMovieBtn");
  loanBtn.onclick=async()=>{closeDialog($("detailsDialog"));if(m.loaned){const updated={...m,loaned:false,loanHistory:[...m.loanHistory,{borrowerFirst:m.borrowerFirst,borrowerLast:m.borrowerLast,loanDate:m.loanDate,returnedAt:dateToday()}],borrowerFirst:"",borrowerLast:"",loanDate:""};await saveMovie(updated);await refresh();toast("DVD marqué comme rendu")}else formMovie({...m,loaned:true,loanDate:dateToday()})};
  openDialog($("detailsDialog"));
- if(m.tmdbId)loadTrailer(m.tmdbId, $("detailsContent").querySelector("#trailerArea"));
+ loadTrailerForMovie(m, $("detailsContent").querySelector("#trailerArea"));
  // Les DVD ajoutés avant cette amélioration récupèrent leur résumé à la première ouverture.
  if(m.tmdbId&&!m.overview){
   const loading=$("detailsContent").querySelector("#overviewLoading");
@@ -92,6 +93,20 @@ async function showDetails(id){
    if($("detailsDialog").open)showDetails(id);
   }catch(e){if(loading)loading.textContent="Résumé indisponible. Vérifie la connexion et la clé API dans Paramètres.";}
  }
+}
+async function loadTrailerForMovie(m, container){
+ if(!container)return;
+ try{
+  let id=m.tmdbId;
+  if(!id){
+   const data=await getTMDB("search/movie",{query:m.title,include_adult:"false"});
+   const norm=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+   const match=(data.results||[]).find(r=>(norm(r.title)===norm(m.title)||norm(r.original_title)===norm(m.title))&&(!m.year||String(r.release_date||"").slice(0,4)===String(m.year)));
+   if(!match){if(container.isConnected)container.textContent="Bande-annonce indisponible : film non identifié dans TMDB.";return}
+   id=match.id;
+  }
+  await loadTrailer(id,container);
+ }catch(e){if(container.isConnected)container.textContent="Bande-annonce indisponible : vérifie la connexion ou la clé TMDB."}
 }
 async function loadTrailer(tmdbId, container){
  if(!container)return;
@@ -110,7 +125,8 @@ async function loadTrailer(tmdbId, container){
    ||youtube.find(v=>v.type==="Trailer" && v.official)
    ||youtube.find(v=>v.type==="Trailer")
    ||youtube.find(v=>v.type==="Teaser");
-  if(!isCurrent()||!video)return;
+  if(!isCurrent())return;
+  if(!video){container.textContent="Aucune bande-annonce disponible sur TMDB pour ce film.";return;}
   const link=document.createElement("a");
   link.className="primary trailer-link";
   link.textContent="▶ Voir la bande-annonce";
@@ -119,7 +135,7 @@ async function loadTrailer(tmdbId, container){
   link.rel="noopener noreferrer";
   link.setAttribute("aria-label","Voir la bande-annonce sur YouTube (nouvel onglet)");
   container.replaceChildren(link);
- }catch(e){ /* No trailer button when TMDB is unavailable. */ }
+ }catch(e){if(isCurrent())container.textContent="Impossible de charger la bande-annonce (connexion ou clé TMDB).";}
 }
 async function getTMDB(path,params={}){
  const key=settings().key;if(!key)throw new Error("Configure d’abord ta clé API TMDB dans les paramètres ⚙.");
