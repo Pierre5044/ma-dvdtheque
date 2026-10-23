@@ -62,7 +62,37 @@ function buildMovieFromForm(){
  }
  return normalizeMovie({...(old||{}),id:old?.id||uid(),title:$("movieTitle").value.trim(),year:$("movieYear").value,director:$("movieDirector").value.trim(),genres:normalizeGenres($("movieGenres").value),barcode:$("movieBarcode").value.trim(),poster:$("moviePoster").value.trim(),notes:$("movieNotes").value.trim(),overview:$("movieOverview").value.trim(),tmdbId:old?.tmdbId||formTmdbId,loaned,borrowerFirst:loaned?first:"",borrowerLast:loaned?last:"",loanDate:loaned?date:"",loanHistory:history,addedAt:old?.addedAt||new Date().toISOString()})
 }
-async function submitMovie(e){e.preventDefault();const m=buildMovieFromForm();if(!m)return;await saveMovie(m);closeDialog($("movieDialog"));await refresh();toast("DVD enregistré");}
+function normalizedTitle(value){
+ return String(value||"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLocaleLowerCase("fr").replace(/[^a-z0-9]+/g," ").trim();
+}
+function findDuplicate(m){
+ const title=normalizedTitle(m.title);
+ const year=String(m.year||"").trim();
+ const barcode=String(m.barcode||"").trim();
+ return movies.find(other=>{
+  if(other.id===m.id)return false; // Modifier un DVD n'est pas un doublon de lui-même.
+  if(m.tmdbId&&other.tmdbId&&String(m.tmdbId)===String(other.tmdbId))return true;
+  if(barcode&&String(other.barcode||"").trim()===barcode)return true;
+  const sameTitle=title&&normalizedTitle(other.title)===title;
+  // Si les deux années sont connues, elles doivent correspondre.
+  return sameTitle&&(!year||!other.year||String(other.year).trim()===year);
+ });
+}
+async function submitMovie(e){
+ e.preventDefault();
+ const m=buildMovieFromForm();
+ if(!m)return;
+ const duplicate=findDuplicate(m);
+ if(duplicate){
+  const details=[duplicate.title,duplicate.year?`(${duplicate.year})`:""].filter(Boolean).join(" ");
+  const ok=window.confirm(`⚠️ Ce film figure déjà dans ta DVDthèque !\\n\\n${details}\\n\\nSouhaites-tu quand même ajouter cet exemplaire ?\\n\\nOK : ajouter quand même\\nAnnuler : revenir au formulaire`);
+  if(!ok)return;
+ }
+ await saveMovie(m);
+ closeDialog($("movieDialog"));
+ await refresh();
+ toast("DVD enregistré");
+}
 async function showDetails(id){
  const m=movies.find(x=>x.id===id);if(!m)return;
  $("detailsContent").innerHTML=`<div class="dialog-head"><div><p class="eyebrow">FICHE DVD</p><h2>Détails du film</h2></div><button type="button" class="icon-button close-dialog" aria-label="Fermer">×</button></div>
