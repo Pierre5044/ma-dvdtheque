@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#18382c">
+  <meta name="description" content="Ma vidéothèque DVD personnelle">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>Ma DVDthèque</title>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-icon">▣</span><div><h1>Ma DVDthèque</h1><p>Ma collection, toujours à portée de main</p></div></div>
+  <button id="settingsBtn" class="icon-button" aria-label="Paramètres" title="Paramètres">⚙</button>
+</header>
+<main>
+  <section class="stats" aria-label="Résumé de la collection">
+    <div><strong id="totalCount">0</strong><span>DVD</span></div>
+    <div><strong id="loanCount">0</strong><span>Prêtés</span></div>
+    <div><strong id="genreCount">0</strong><span>Genres</span></div>
+  </section>
+  <section class="toolbar">
+    <label class="searchbox"><span>⌕</span><input id="searchInput" type="search" placeholder="Rechercher un titre, genre, emprunteur…" autocomplete="off"></label>
+    <div class="filters">
+      <select id="genreFilter" aria-label="Filtrer par genre"><option value="">Tous les genres</option></select>
+      <select id="statusFilter" aria-label="Filtrer par disponibilité">
+        <option value="all">Tous les DVD</option><option value="available">Disponibles</option><option value="loaned">Prêtés</option>
+      </select>
+      <select id="sortSelect" aria-label="Trier les DVD">
+        <option value="title">Titre A → Z</option><option value="year-desc">Année récente</option><option value="year-asc">Année ancienne</option><option value="added-desc">Ajout récent</option>
+      </select>
+    </div>
+  </section>
+  <div class="section-heading"><h2>Ma collection</h2><span id="resultCount" class="muted">0 résultat</span></div>
+  <section id="movieGrid" class="movie-grid" aria-live="polite"></section>
+  <div id="emptyState" class="empty-state"><div class="empty-icon">🎬</div><h3>Ta vidéothèque commence ici</h3><p>Ajoute un film par son titre ou scanne le code-barres de son boîtier.</p><button class="primary" id="emptyAddBtn">＋ Ajouter un DVD</button></div>
+</main>
+<nav class="bottom-nav">
+  <button id="navCollection" class="nav-item active"><span>▦</span>Collection</button>
+  <button id="navLoans" class="nav-item"><span>↗</span>DVD prêtés</button>
+  <button id="navAdd" class="nav-item"><span>＋</span>Ajouter</button>
+  <button id="navBackup" class="nav-item"><span>⇅</span>Sauvegarde</button>
+</nav>
+
+<dialog id="movieDialog">
+  <form id="movieForm" method="dialog">
+    <div class="dialog-head"><div><p class="eyebrow" id="formEyebrow">NOUVEAU DVD</p><h2 id="formTitle">Ajouter un film</h2></div><button type="button" class="icon-button close-dialog" aria-label="Fermer">×</button></div>
+    <input type="hidden" id="movieId">
+    <div class="form-grid">
+      <label class="full">Titre *<input id="movieTitle" required maxlength="180" placeholder="Titre du film"></label>
+      <label>Année<input id="movieYear" type="number" min="1888" max="2100" placeholder="2001"></label>
+      <label>Réalisateur<input id="movieDirector" maxlength="180" placeholder="Réalisateur"></label>
+      <label class="full">Genres (séparés par des virgules)<input id="movieGenres" placeholder="Action, Aventure, Historique"></label>
+      <label class="full">Code-barres (EAN)<div class="inline-field"><input id="movieBarcode" inputmode="numeric" placeholder="Numéro du code-barres"><button type="button" id="scanFromForm" class="secondary">▥ Scanner</button></div></label>
+      <label class="full">Affiche (URL)<input id="moviePoster" type="url" placeholder="Renseignée automatiquement si disponible"></label>
+      <label class="full">Notes<textarea id="movieNotes" rows="2" placeholder="Édition, langue, emplacement…"></textarea></label>
+    </div>
+    <section class="loan-editor">
+      <label class="checkline"><input id="movieLoaned" type="checkbox"> DVD prêté à quelqu’un</label>
+      <div id="loanFields" class="form-grid hidden">
+        <label>Prénom de l’emprunteur<input id="borrowerFirst" maxlength="100" placeholder="Prénom"></label>
+        <label>Nom de l’emprunteur<input id="borrowerLast" maxlength="100" placeholder="Nom"></label>
+        <label class="full">Date du prêt<input id="loanDate" type="date"></label>
+      </div>
+    </section>
+    <div class="dialog-actions"><button type="button" class="secondary close-dialog">Annuler</button><button type="submit" class="primary">Enregistrer le DVD</button></div>
+    <p id="formMessage" class="form-message" role="status"></p>
+  </form>
+</dialog>
+
+<dialog id="searchDialog">
+  <form id="searchForm" method="dialog">
+    <div class="dialog-head"><div><p class="eyebrow">BASE DE DONNÉES CINÉMA</p><h2>Rechercher un film</h2></div><button type="button" class="icon-button close-dialog" aria-label="Fermer">×</button></div>
+    <p class="muted small">Recherche les titres et affiches dans TMDB. La clé API se configure dans ⚙ Paramètres.</p>
+    <label class="full">Titre du film<div class="inline-field"><input id="tmdbQuery" placeholder="Ex. Le Seigneur des anneaux" required><button class="primary" type="submit">Chercher</button></div></label>
+    <div class="dialog-actions add-manual-actions"><button type="button" id="manualAddBtn" class="secondary">Saisir un film manuellement</button><button type="button" id="scanAddBtn" class="secondary">▥ Scanner un code-barres</button></div>
+    <div id="tmdbResults" class="tmdb-results"></div>
+    <p id="tmdbMessage" class="form-message" role="status"></p>
+  </form>
+</dialog>
+
+<dialog id="scanDialog">
+  <div class="dialog-head"><div><p class="eyebrow">AJOUT RAPIDE</p><h2>Scanner un code-barres</h2></div><button type="button" class="icon-button close-dialog" aria-label="Fermer">×</button></div>
+  <p class="muted small">Autorise l’accès à la caméra et vise le code-barres EAN au dos du boîtier. Si le scan ne fonctionne pas, saisis le numéro manuellement.</p>
+  <video id="scanVideo" playsinline muted></video>
+  <p id="scanStatus" class="form-message" role="status">Préparation de la caméra…</p>
+  <label>Code-barres saisi manuellement<input id="manualBarcode" inputmode="numeric" placeholder="Ex. 505058..." autocomplete="off"></label>
+  <div class="dialog-actions"><button id="useManualBarcode" type="button" class="secondary">Utiliser ce numéro</button><button id="stopScan" type="button" class="primary">Fermer le scanner</button></div>
+</dialog>
+
+<dialog id="detailsDialog">
+  <div id="detailsContent"></div>
+</dialog>
+
+<dialog id="settingsDialog">
+  <form id="settingsForm" method="dialog">
+    <div class="dialog-head"><div><p class="eyebrow">PERSONNALISATION</p><h2>Paramètres</h2></div><button type="button" class="icon-button close-dialog" aria-label="Fermer">×</button></div>
+    <p>La collection est stockée dans ce navigateur sur ce téléphone. Exporte régulièrement une sauvegarde JSON.</p>
+    <label>Clé API TMDB <input id="tmdbKey" type="password" autocomplete="off" placeholder="Clé API v3 (authentification)"></label>
+    <p class="muted small">Obtiens une clé gratuite depuis ton compte TMDB, dans les paramètres API. Elle est enregistrée uniquement dans le stockage local de ce navigateur.</p>
+    <label>Nom affiché de la collection<input id="collectionName" maxlength="80" placeholder="Ma DVDthèque"></label>
+    <div class="dialog-actions"><button type="button" class="secondary close-dialog">Fermer</button><button type="submit" class="primary">Enregistrer</button></div>
+    <p class="muted tiny">Les affiches et informations TMDB restent soumises aux conditions de TMDB. Voir le fichier README inclus.</p>
+  </form>
+</dialog>
+
+<dialog id="backupDialog">
+  <div class="dialog-head"><div><p class="eyebrow">TES DONNÉES</p><h2>Sauvegarde & restauration</h2></div><button type="button" class="icon-button close-dialog" aria-label="Fermer">×</button></div>
+  <p>La sauvegarde contient les titres, genres, codes-barres, informations de prêts et historique. Les images d’affiche sont référencées par URL, elles ne sont pas intégrées au fichier.</p>
+  <div class="backup-actions"><button id="exportBtn" class="primary">⇩ Exporter ma collection (.json)</button><label class="secondary file-button">⇧ Restaurer depuis un fichier<input type="file" id="importFile" accept=".json,application/json"></label></div>
+  <p id="backupMessage" class="form-message" role="status"></p>
+  <p class="muted small">Conseil : conserve une copie sur ton ordinateur ou dans un espace de stockage sûr. Une restauration remplace la collection actuellement présente sur ce téléphone.</p>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<footer class="attribution">Données de films : TMDB lorsque configuré. Cette application n’est ni approuvée ni certifiée par TMDB.</footer>
+<script src="app.js"></script>
+</body>
+</html>
