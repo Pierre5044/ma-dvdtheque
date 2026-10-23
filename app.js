@@ -68,6 +68,7 @@ async function showDetails(id){
  <div class="detail-hero">${m.poster?`<img src="${esc(m.poster)}" alt="Affiche">`:'<div class="poster-placeholder">🎬</div>'}<div><h2>${esc(m.title)}</h2><div class="muted">${esc(m.year||"Année inconnue")}</div><p class="detail-info">${esc(m.director||"Réalisateur non renseigné")}</p>${m.loaned?'<span class="loan-badge">PRÊTÉ</span>':'<span class="chip">Disponible</span>'}</div></div>
  <p class="detail-label">GENRES</p><div class="card-genres">${m.genres.length?m.genres.map(g=>`<span class="chip">${esc(g)}</span>`).join(""):'<span class="muted">Non renseigné</span>'}</div>
  ${m.overview?`<p class="detail-label">RÉSUMÉ</p><p class="detail-info overview-text">${esc(m.overview)}</p>`:'<p class="detail-label">RÉSUMÉ</p><p class="detail-info muted" id="overviewLoading">Résumé non disponible pour ce film.</p>'}
+ ${m.tmdbId?`<div id="trailerArea" class="trailer-area" aria-live="polite"></div>`:""}
  ${m.barcode?`<p class="detail-label">CODE-BARRES</p><p class="detail-info">${esc(m.barcode)}</p>`:""}
  ${m.loaned?`<p class="detail-label">PRÊT EN COURS</p><p class="detail-info"><strong>${esc(m.borrowerFirst)} ${esc(m.borrowerLast)}</strong><br>Depuis le ${esc(m.loanDate||"date inconnue")}</p>`:""}
  ${m.notes?`<p class="detail-label">NOTES</p><p class="detail-info">${esc(m.notes)}</p>`:""}
@@ -79,6 +80,7 @@ async function showDetails(id){
  const loanBtn=$("returnMovieBtn")||$("loanMovieBtn");
  loanBtn.onclick=async()=>{closeDialog($("detailsDialog"));if(m.loaned){const updated={...m,loaned:false,loanHistory:[...m.loanHistory,{borrowerFirst:m.borrowerFirst,borrowerLast:m.borrowerLast,loanDate:m.loanDate,returnedAt:dateToday()}],borrowerFirst:"",borrowerLast:"",loanDate:""};await saveMovie(updated);await refresh();toast("DVD marqué comme rendu")}else formMovie({...m,loaned:true,loanDate:dateToday()})};
  openDialog($("detailsDialog"));
+ if(m.tmdbId)loadTrailer(m.tmdbId, $("detailsContent").querySelector("#trailerArea"));
  // Les DVD ajoutés avant cette amélioration récupèrent leur résumé à la première ouverture.
  if(m.tmdbId&&!m.overview){
   const loading=$("detailsContent").querySelector("#overviewLoading");
@@ -90,6 +92,34 @@ async function showDetails(id){
    if($("detailsDialog").open)showDetails(id);
   }catch(e){if(loading)loading.textContent="Résumé indisponible. Vérifie la connexion et la clé API dans Paramètres.";}
  }
+}
+async function loadTrailer(tmdbId, container){
+ if(!container)return;
+ // The area belongs to one specific opening of the movie dialog.
+ const isCurrent=()=>container.isConnected && $("detailsDialog").open;
+ try{
+  let data=await getTMDB(`movie/${encodeURIComponent(tmdbId)}/videos`);
+  let videos=Array.isArray(data.results)?data.results:[];
+  if(!videos.some(v=>v.site==="YouTube" && v.type==="Trailer" && v.key)){
+   data=await getTMDB(`movie/${encodeURIComponent(tmdbId)}/videos`,{language:"en-US"});
+   videos=videos.concat(Array.isArray(data.results)?data.results:[]);
+  }
+  const youtube=videos.filter(v=>v.site==="YouTube" && v.key && /^[a-zA-Z0-9_-]{11}$/.test(v.key));
+  const video=youtube.find(v=>v.type==="Trailer" && v.official && v.iso_639_1==="fr")
+   ||youtube.find(v=>v.type==="Trailer" && v.iso_639_1==="fr")
+   ||youtube.find(v=>v.type==="Trailer" && v.official)
+   ||youtube.find(v=>v.type==="Trailer")
+   ||youtube.find(v=>v.type==="Teaser");
+  if(!isCurrent()||!video)return;
+  const link=document.createElement("a");
+  link.className="primary trailer-link";
+  link.textContent="▶ Voir la bande-annonce";
+  link.href=`https://www.youtube.com/watch?v=${encodeURIComponent(video.key)}`;
+  link.target="_blank";
+  link.rel="noopener noreferrer";
+  link.setAttribute("aria-label","Voir la bande-annonce sur YouTube (nouvel onglet)");
+  container.replaceChildren(link);
+ }catch(e){ /* No trailer button when TMDB is unavailable. */ }
 }
 async function getTMDB(path,params={}){
  const key=settings().key;if(!key)throw new Error("Configure d’abord ta clé API TMDB dans les paramètres ⚙.");
