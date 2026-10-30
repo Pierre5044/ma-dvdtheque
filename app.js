@@ -97,8 +97,27 @@ function remoteMoviePayload(m){
   nom_emprunteur:m.loaned?m.borrowerLast:'',date_pret:m.loaned?(m.loanDate||null):null,
   historique_prets:m.loanHistory||[],date_ajout:m.addedAt};
 }
-function loanState(m){return JSON.stringify([!!m.loaned,m.borrowerFirst||'',m.borrowerLast||'',m.loanDate||'',m.loanHistory||[]]);}
-function remoteLoanState(r){return JSON.stringify([!!r.est_prete,r.prenom_emprunteur||'',r.nom_emprunteur||'',r.date_pret||'',r.historique_prets||[]]);}
+function loanState(m){
+  if(!m.loaned) return JSON.stringify([false]);
+  return JSON.stringify([
+    true,
+    m.borrowerFirst || '',
+    m.borrowerLast || '',
+    m.loanDate || '',
+    m.loanHistory || []
+  ]);
+}
+
+function remoteLoanState(r){
+  if(!r.est_prete) return JSON.stringify([false]);
+  return JSON.stringify([
+    true,
+    r.prenom_emprunteur || '',
+    r.nom_emprunteur || '',
+    r.date_pret || '',
+    r.historique_prets || []
+  ]);
+}
 async function pushMovie(m,previous){
  if(!await ensureAdminSession())throw new Error('Connecte-toi dans Réservations pour synchroniser les DVD. Rien n’a été modifié.');
  const existing=await supabaseRequest('/rest/v1/films?select=id,titre,est_prete,prenom_emprunteur,nom_emprunteur,date_pret,historique_prets&id=eq.'+encodeURIComponent(m.id));
