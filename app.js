@@ -453,7 +453,7 @@ function wire(){
   $("reservationSettings").onclick=()=>$("settingsBtn").click();
   $("reservationLogin").addEventListener("submit",loginAdmin);
   $("reservationRefresh").onclick=loadReservations;
-  $("syncTestMovie").onclick=sendTestMovieToSupabase;
+  if($("syncTestMovie"))$("syncTestMovie").onclick=sendTestMovieToSupabase;
   $("reservationLogout").onclick=()=>{adminSession=null;sessionStorage.removeItem("pitouAdminSession");showReservationPanels();reservationMessage("Déconnecté.")};
   $("reservationList").addEventListener("click",e=>{const button=e.target.closest("button[data-reservation-id]");if(button)changeReservationStatus(button.dataset.reservationId,button.dataset.status)});
   $("navLoans").onclick=()=>{currentView="loans";$("statusFilter").value="loaned";render();window.scrollTo({top:0,behavior:"smooth"})};
