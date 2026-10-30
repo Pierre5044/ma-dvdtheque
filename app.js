@@ -85,6 +85,44 @@ function findDuplicate(m){
   return sameTitle&&(!year||!other.year||String(other.year).trim()===year);
  });
 }
+
+// V10 : écritures ciblées sur Supabase, sans jamais modifier est_reserve.
+// La sauvegarde JSON et la restauration restent exclusivement locales.
+function remoteMoviePayload(m){
+ const num=x=>String(x??'').trim() && Number.isFinite(Number(x))?Number(x):null;
+ return {titre:m.title,annee:num(m.year),genre:m.genres.join(', '),resume:m.overview||'',disponible:!m.loaned,
+  affiche_url:m.poster||'',tmdb_id:num(m.tmdbId),code_barres:m.barcode||'',
+  realisateur:m.director||'',notes:m.notes||'',duree:String(m.runtime||''),
+  est_prete:!!m.loaned,prenom_emprunteur:m.loaned?m.borrowerFirst:'',
+  nom_emprunteur:m.loaned?m.borrowerLast:'',date_pret:m.loaned?(m.loanDate||null):null,
+  historique_prets:m.loanHistory||[],date_ajout:m.addedAt};
+}
+function loanState(m){return JSON.stringify([!!m.loaned,m.borrowerFirst||'',m.borrowerLast||'',m.loanDate||'',m.loanHistory||[]]);}
+function remoteLoanState(r){return JSON.stringify([!!r.est_prete,r.prenom_emprunteur||'',r.nom_emprunteur||'',r.date_pret||'',r.historique_prets||[]]);}
+async function pushMovie(m,previous){
+ if(!await ensureAdminSession())throw new Error('Connecte-toi dans Réservations pour synchroniser les DVD. Rien n’a été modifié.');
+ const existing=await supabaseRequest('/rest/v1/films?select=id,titre,est_prete,prenom_emprunteur,nom_emprunteur,date_pret,historique_prets&id=eq.'+encodeURIComponent(m.id));
+ if(existing.length>1)throw new Error('Identifiant présent plusieurs fois dans Supabase.');
+ if(existing.length){
+  if(!previous)throw new Error('Ce DVD existe déjà dans Supabase. Modification annulée.');
+  if(loanState(previous)!==remoteLoanState(existing[0]))throw new Error('Le prêt a changé dans Supabase depuis le chargement local. Actualise tes données avant de modifier ce DVD.');
+  const saved=await supabaseRequest('/rest/v1/films?id=eq.'+encodeURIComponent(m.id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(remoteMoviePayload(m))});
+  if(!Array.isArray(saved)||saved.length!==1)throw new Error('Mise à jour non confirmée par Supabase.');
+ }else{
+  if(previous)throw new Error('Ce DVD manque dans Supabase. Aucune recréation automatique pour éviter les doublons.');
+  const saved=await supabaseRequest('/rest/v1/films',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({id:m.id,...remoteMoviePayload(m),disponible:true,est_reserve:false})});
+  if(!Array.isArray(saved)||saved.length!==1)throw new Error('Création non confirmée par Supabase.');
+ }
+}
+async function removeMovieFromSupabase(m){
+ if(!await ensureAdminSession())throw new Error('Connecte-toi dans Réservations avant de supprimer.');
+ const remote=await supabaseRequest('/rest/v1/films?select=id,est_reserve,est_prete&id=eq.'+encodeURIComponent(m.id));
+ if(remote.length!==1)throw new Error('DVD introuvable dans Supabase : suppression annulée.');
+ if(remote[0].est_reserve||remote[0].est_prete)throw new Error('Ce DVD est réservé ou prêté dans Supabase : suppression bloquée.');
+ const deleted=await supabaseRequest('/rest/v1/films?id=eq.'+encodeURIComponent(m.id),{method:'DELETE',headers:{Prefer:'return=representation'}});
+ if(!Array.isArray(deleted)||deleted.length!==1)throw new Error('Suppression non confirmée.');
+}
+
 async function submitMovie(e){
  e.preventDefault();
  const m=buildMovieFromForm();
@@ -114,9 +152,9 @@ async function showDetails(id){
  <div class="dialog-actions"><button id="deleteMovieBtn" class="danger-button">Supprimer</button><button id="editMovieBtn" class="secondary">Modifier</button>${m.loaned?'<button id="returnMovieBtn" class="primary">Marquer comme rendu</button>':'<button id="loanMovieBtn" class="primary">Prêter ce DVD</button>'}</div>`;
  $("detailsContent").querySelector(".close-dialog").onclick=()=>closeDialog($("detailsDialog"));
  $("editMovieBtn").onclick=()=>{closeDialog($("detailsDialog"));formMovie(m)};
- $("deleteMovieBtn").onclick=async()=>{if(confirm(`Supprimer « ${m.title} » de la collection ?`)){await deleteMovie(m.id);closeDialog($("detailsDialog"));await refresh();toast("DVD supprimé")}};
+ $("deleteMovieBtn").onclick=async()=>{if(confirm(`Supprimer « ${m.title} » de la collection ?`)){try{await removeMovieFromSupabase(m);await deleteMovie(m.id);closeDialog($("detailsDialog"));await refresh();toast("DVD supprimé et synchronisé")}catch(error){alert("Suppression annulée : "+error.message)}}};
  const loanBtn=$("returnMovieBtn")||$("loanMovieBtn");
- loanBtn.onclick=async()=>{closeDialog($("detailsDialog"));if(m.loaned){const updated={...m,loaned:false,loanHistory:[...m.loanHistory,{borrowerFirst:m.borrowerFirst,borrowerLast:m.borrowerLast,loanDate:m.loanDate,returnedAt:dateToday()}],borrowerFirst:"",borrowerLast:"",loanDate:""};await saveMovie(updated);await refresh();toast("DVD marqué comme rendu")}else formMovie({...m,loaned:true,loanDate:dateToday()})};
+ loanBtn.onclick=async()=>{closeDialog($("detailsDialog"));if(m.loaned){const updated={...m,loaned:false,loanHistory:[...m.loanHistory,{borrowerFirst:m.borrowerFirst,borrowerLast:m.borrowerLast,loanDate:m.loanDate,returnedAt:dateToday()}],borrowerFirst:"",borrowerLast:"",loanDate:""};try{await pushMovie(updated,m);await saveMovie(updated);await refresh();toast("Retour synchronisé avec Supabase")}catch(error){alert("Retour non enregistré : "+error.message)}}else formMovie({...m,loaned:true,loanDate:dateToday()})};
  openDialog($("detailsDialog"));
  loadTrailerForMovie(m, $("detailsContent").querySelector("#trailerArea"));
  // Les DVD ajoutés avant cette amélioration récupèrent leur résumé à la première ouverture.
@@ -331,7 +369,7 @@ async function loginAdmin(event){
   if(session.user?.id!==ADMIN_UID)throw new Error("Ce compte n'est pas autorisé à gérer les réservations.");
   adminSession={...session,expires_at:Date.now()+session.expires_in*1000};
   sessionStorage.setItem("pitouAdminSession",JSON.stringify(adminSession));$("adminPassword").value="";
-  showReservationPanels();await loadReservations();
+  showReservationPanels();await loadReservations();toast("Connecté : modifications des DVD synchronisées");
  }catch(error){reservationMessage("Connexion impossible : "+error.message)}
 }
 function reservationCard(r){
