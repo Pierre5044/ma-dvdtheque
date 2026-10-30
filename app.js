@@ -475,7 +475,7 @@ async function init(){
  const previousName=localStorage.getItem("collectionName");
  if(!previousName||previousName==="Ma DVDthèque")localStorage.setItem("collectionName","Les Films de Pitou");
  try{const stored=JSON.parse(sessionStorage.getItem("pitouAdminSession")||"null");if(stored?.user?.id===ADMIN_UID)adminSession=stored}catch{}db=await openDB();wire();showReservationPanels();document.querySelector(".brand h1").textContent=settings().name;await refresh();if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});}
- catch(e){alert("Impossible d’ouvrir la base de données locale. Essaie avec Chrome en mode normal.");console.error(e)}
+ catch(e){alert("Erreur au démarrage : "+e.name+" - "+e.message);console.error(e)}
 }
 document.addEventListener("DOMContentLoaded",init);
 })();
