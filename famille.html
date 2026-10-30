@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Les Films de Pitou — Catalogue familial</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color-scheme:dark;background:#111827;color:#f9fafb}*{box-sizing:border-box}body{margin:0}header{background:#1f2937;padding:24px 16px;text-align:center}h1{margin:0 0 6px;font-size:clamp(1.5rem,5vw,2.3rem)}header p{margin:0;color:#d1d5db}.container{max-width:1100px;margin:auto;padding:20px 14px}.tools{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}input,select,textarea{font:inherit;background:#fff;color:#111827;border:1px solid #9ca3af;border-radius:8px;padding:10px;width:100%}.tools input{flex:2;min-width:180px}.tools select{flex:1;min-width:160px}.count{color:#d1d5db;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:16px}.film{background:#1f2937;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}.poster{aspect-ratio:2/3;background:#374151;display:flex;align-items:center;justify-content:center;text-align:center;color:#d1d5db}.poster img{width:100%;height:100%;object-fit:cover}.film-content{padding:12px;display:flex;flex:1;flex-direction:column;gap:8px}.film h2{font-size:1rem;margin:0}.meta{font-size:.82rem;color:#d1d5db}.status{font-size:.83rem;font-weight:650;color:#86efac}.status.no{color:#fca5a5}button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:10px 12px;background:#fbbf24;color:#111827;font-weight:700}button:disabled{opacity:.55;cursor:not-allowed}.film button{margin-top:auto}.error{color:#fecaca}dialog{background:#1f2937;color:white;border:1px solid #4b5563;border-radius:14px;width:min(94vw,480px);max-height:90vh;overflow:auto}dialog::backdrop{background:#000b}dialog form{display:grid;gap:10px}dialog h2{margin:0 0 4px}label{font-size:.9rem;display:grid;gap:4px}.actions{display:flex;gap:10px}.actions button{flex:1}.secondary{background:#d1d5db}.feedback{min-height:1.4em}.summary{font-size:.84rem;color:#d1d5db;line-height:1.4}footer{text-align:center;color:#9ca3af;padding:30px 12px;font-size:.8rem}
+</style>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+</head>
+<body>
+<header><h1>🎬 Les Films de Pitou</h1><p>Le catalogue familial de nos DVD</p></header>
+<main class="container">
+  <div class="tools"><input id="search" type="search" placeholder="Rechercher un film…" aria-label="Rechercher un film"><select id="genre" aria-label="Filtrer par genre"><option value="">Tous les genres</option></select></div>
+  <p class="count" id="count">Chargement des films…</p>
+  <div class="grid" id="films"></div>
+</main>
+<dialog id="dialog">
+  <form id="booking">
+    <h2>Demander un DVD</h2>
+    <p id="chosenTitle" style="margin:0"></p>
+    <label>Prénom <input name="prenom" maxlength="80" required autocomplete="given-name"></label>
+    <label>Nom <input name="nom" maxlength="80" required autocomplete="family-name"></label>
+    <label>E-mail (facultatif) <input name="email" type="email" maxlength="254" autocomplete="email"></label>
+    <label>Message (facultatif) <textarea name="message" maxlength="1000" rows="3"></textarea></label>
+    <div id="turnstile"></div>
+    <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+    <div class="actions"><button type="button" class="secondary" id="close">Annuler</button><button id="send" type="submit">Envoyer la demande</button></div>
+  </form>
+</dialog>
+<footer>Catalogue familial · Les demandes sont soumises à confirmation.</footer>
+<script>
+'use strict';
+// REMPLACER UNIQUEMENT LES DEUX VALEURS CI-DESSOUS :
+const SUPABASE_PUBLISHABLE_KEY = 'Sb_publishable_8dTFk1PPzLyzvF7tCk7UZA_gAvFz60Y';
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFsf26VPWfN3oBUX';
+// Adresse du projet Supabase (publique)
+const SUPABASE_URL = 'https://srkgplvybjxqzwjckwwf.supabase.co';
+
+const $ = id => document.getElementById(id);
+const api = SUPABASE_URL + '/rest/v1/films_publics?select=id,titre,annee,genre,resume,affiche_url,disponible&order=titre.asc&limit=1000';
+let films = [], selected = null, widgetId = null;
+function genresOf(value) {
+  if (!value) return [];
+  let items = [];
+  try { const parsed = JSON.parse(value); if (Array.isArray(parsed)) items = parsed; } catch (_) {}
+  if (!items.length) items = String(value).split(/[,;|]/);
+  return items.map(x => String(x).trim()).filter(Boolean);
+}
+function genreKey(s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[\s_-]+/g,' ').trim(); }
+function genreLabel(s) { const key = genreKey(s); if (['science fiction','sci fi','sf'].includes(key)) return 'Science-fiction'; return s.trim(); }
+function render() {
+  const q = $('search').value.trim().toLocaleLowerCase('fr');
+  const g = $('genre').value;
+  const visible = films.filter(f => (!q || (f.titre||'').toLocaleLowerCase('fr').includes(q)) && (!g || genresOf(f.genre).some(x => genreKey(genreLabel(x)) === g)));
+  $('count').textContent = `${visible.length} film${visible.length>1?'s':''} affiché${visible.length>1?'s':''} sur ${films.length}`;
+  const grid = $('films'); grid.replaceChildren();
+  for (const f of visible) {
+    const card = document.createElement('article'); card.className='film';
+    const poster = document.createElement('div'); poster.className='poster';
+    if (f.affiche_url && /^https:\/\//i.test(f.affiche_url)) {
+      const img = document.createElement('img'); img.src=f.affiche_url; img.alt=`Affiche de ${f.titre}`; img.loading='lazy'; img.referrerPolicy='no-referrer'; img.onerror=()=>{poster.textContent='🎬 Affiche indisponible';}; poster.append(img);
+    } else poster.textContent='🎬 Sans affiche';
+    const content=document.createElement('div'); content.className='film-content';
+    const title=document.createElement('h2'); title.textContent=f.titre;
+    const meta=document.createElement('div'); meta.className='meta'; meta.textContent=[f.annee,genresOf(f.genre).map(genreLabel).join(' · ')].filter(Boolean).join(' · ');
+    const status=document.createElement('div'); status.className='status'+(f.disponible?'':' no'); status.textContent=f.disponible?'Disponible':'Indisponible';
+    content.append(title,meta,status);
+    if(f.resume){const summary=document.createElement('p');summary.className='summary';summary.textContent=f.resume.length>180?f.resume.slice(0,180)+'…':f.resume;content.append(summary);}
+    const btn=document.createElement('button');btn.textContent=f.disponible?'Réserver ce DVD':'Indisponible';btn.disabled=!f.disponible;btn.addEventListener('click',()=>openBooking(f));content.append(btn);
+    card.append(poster,content);grid.append(card);
+  }
+}
+async function load() {
+  if(SUPABASE_PUBLISHABLE_KEY.startsWith('COLLER_ICI_')) { $('count').textContent='Configuration manquante : ajoute la Publishable Key Supabase dans famille.html.'; return; }
+  try {
+    const res=await fetch(api,{headers:{apikey:SUPABASE_PUBLISHABLE_KEY}});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    films=await res.json();
+    const labels=new Map();
+    for(const f of films) for(const x of genresOf(f.genre)){const label=genreLabel(x);const key=genreKey(label);if(!labels.has(key))labels.set(key,label);}
+    for(const [key,label] of [...labels.entries()].sort((a,b)=>a[1].localeCompare(b[1],'fr'))){const option=document.createElement('option');option.value=key;option.textContent=label;$('genre').append(option);}
+    render();
+  } catch(e) { $('count').textContent='Impossible de charger le catalogue. Vérifie la clé publique et les autorisations Supabase.'; console.error(e); }
+}
+function openBooking(f) {
+  selected=f;$('booking').reset();$('chosenTitle').textContent=f.titre;$('feedback').textContent='';$('dialog').showModal();
+  if(widgetId!==null && window.turnstile) window.turnstile.reset(widgetId);
+  else initTurnstile();
+}
+function initTurnstile(){
+  if(!window.turnstile || TURNSTILE_SITE_KEY.startsWith('COLLER_ICI_')) return;
+  if(widgetId===null) widgetId=window.turnstile.render('#turnstile',{sitekey:TURNSTILE_SITE_KEY,theme:'dark'});
+}
+$('close').addEventListener('click',()=>$('dialog').close());
+$('search').addEventListener('input',render);$('genre').addEventListener('change',render);
+$('booking').addEventListener('submit',async event=>{
+  event.preventDefault();if(!selected)return;
+  const token=widgetId!==null&&window.turnstile?window.turnstile.getResponse(widgetId):'';
+  if(!token){$('feedback').textContent='Valide d’abord le contrôle anti-robot.';return;}
+  const fd=new FormData(event.currentTarget);$('send').disabled=true;$('feedback').textContent='Envoi en cours…';
+  try {
+    const res=await fetch(SUPABASE_URL+'/functions/v1/reservation-dvd',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({film_id:selected.id,prenom:fd.get('prenom'),nom:fd.get('nom'),email:fd.get('email'),message:fd.get('message'),turnstile_token:token})
+    });
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Erreur '+res.status);
+    $('feedback').textContent='Demande envoyée ! Elle reste à confirmer.';
+    $('send').disabled=true;
+  } catch(e) {$('feedback').textContent=e.message||'Erreur lors de l’envoi.';if(widgetId!==null&&window.turnstile)window.turnstile.reset(widgetId);$('send').disabled=false;}
+});
+load();
+</script>
+</body>
+</html>
