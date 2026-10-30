@@ -5,3 +5,17 @@
 .overview-text{white-space:pre-line;line-height:1.7}.detail-info{overflow-wrap:anywhere}
 
 .trailer-area{margin:16px 0 8px}.trailer-link{text-decoration:none;max-width:100%;text-align:center}
+
+/* Réservations administrateur */
+.reservation-panel,.reservation-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:17px;margin-bottom:13px;box-shadow:var(--shadow)}
+.reservation-panel{display:grid;gap:12px;max-width:560px}
+.reservation-panel h3{margin:0;font:700 21px "Playfair Display",Georgia,serif}
+.reservation-panel label{display:grid;gap:6px;font-size:13px;font-weight:700}
+.reservation-panel input{padding:12px;border:1px solid var(--line);border-radius:9px;min-width:0}
+.reservation-controls,.reservation-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+.reservation-list{display:grid;gap:12px}
+.reservation-card p{font-size:13px;margin:9px 0;overflow-wrap:anywhere}
+.reservation-card-top{display:flex;justify-content:space-between;align-items:start;gap:12px}
+.reservation-status{font-size:11px;background:#f5e9ce;color:#654b20;border-radius:15px;padding:5px 9px;white-space:nowrap}
+.bottom-nav{grid-template-columns:repeat(5,1fr)}
+@media(max-width:390px){.nav-item{font-size:9px}.nav-item span{font-size:19px}}
