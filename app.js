@@ -133,10 +133,17 @@ async function submitMovie(e){
   const ok=window.confirm(`⚠️ Ce film figure déjà dans ta DVDthèque !\\n\\n${details}\\n\\nSouhaites-tu quand même ajouter cet exemplaire ?\\n\\nOK : ajouter quand même\\nAnnuler : revenir au formulaire`);
   if(!ok)return;
  }
- await saveMovie(m);
- closeDialog($("movieDialog"));
- await refresh();
- toast("DVD enregistré");
+   try {
+    const previous = movies.find(x => x.id === m.id);
+    await pushMovie(m, previous);
+    await saveMovie(m);
+    closeDialog($("movieDialog"));
+    await refresh();
+    toast("DVD enregistré et synchronisé");
+  } catch (error) {
+    $("formMessage").textContent =
+      "Enregistrement interrompu : " + error.message;
+  }
 }
 async function showDetails(id){
  const m=movies.find(x=>x.id===id);if(!m)return;
