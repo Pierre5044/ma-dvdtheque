@@ -6,6 +6,10 @@ const $=id=>document.getElementById(id);
 let db, movies=[], currentView="collection", stream=null, scanTimer=null, scanBusy=false, formTmdbId="";
 let pendingBarcode="", barcodeLookupActive=false;
 const defaultGenres=["Action","Aventure","Animation","Biopic","Comédie","Drame","Fantastique","Guerre","Historique","Horreur","Policier","Romance","Science-fiction","Thriller","Western","Documentaire","Famille","Musical"];
+const SUPABASE_URL="https://srkgplvybjxqzwjckwwf.supabase.co";
+const ADMIN_UID="85afca10-69d2-4601-a8e1-829cf90dade2";
+let adminSession=null;
+let publicFilmTitles={};
 const dialogs=["movieDialog","searchDialog","scanDialog","detailsDialog","settingsDialog","backupDialog"].map($);
 function openDialog(d){if(!d.open)d.showModal()}
 function closeDialog(d){if(d.open)d.close()}
@@ -23,6 +27,8 @@ function normalizeGenres(value){return [...new Set(String(value||"").split(",").
 function normalizeMovie(m){return {id:m.id||uid(),title:String(m.title||"Sans titre"),year:m.year||"",director:m.director||"",genres:Array.isArray(m.genres)?m.genres:normalizeGenres(m.genres),barcode:m.barcode||"",poster:m.poster||"",notes:m.notes||"",overview:m.overview||"",runtime:m.runtime||"",loaned:!!m.loaned,borrowerFirst:m.borrowerFirst||"",borrowerLast:m.borrowerLast||"",loanDate:m.loanDate||"",loanHistory:Array.isArray(m.loanHistory)?m.loanHistory:[],addedAt:m.addedAt||new Date().toISOString(),tmdbId:m.tmdbId||""}}
 function movieMatches(m,q){const hay=[m.title,m.year,m.director,...m.genres,m.barcode,m.borrowerFirst,m.borrowerLast,m.notes].join(" ").toLocaleLowerCase("fr");return hay.includes(q.toLocaleLowerCase("fr"))}
 function render(){
+  $("collectionArea").classList.toggle("hidden",currentView==="reservations");
+  $("reservationArea").classList.toggle("hidden",currentView!=="reservations");
  const q=$("searchInput").value.trim(),genre=$("genreFilter").value,status=$("statusFilter").value,sort=$("sortSelect").value;
  let list=movies.filter(m=>(!q||movieMatches(m,q))&&(!genre||m.genres.includes(genre))&&(status==="all"||(status==="loaned"?m.loaned:!m.loaned)));
  if(currentView==="loans")list=list.filter(m=>m.loaned);
@@ -40,7 +46,7 @@ function render(){
  $("emptyAddBtn").textContent=movies.length?"＋ Ajouter un DVD":"＋ Ajouter un DVD";
  const genres=[...new Set([...defaultGenres,...movies.flatMap(m=>m.genres)])].sort((a,b)=>a.localeCompare(b,"fr"));
  const old=$("genreFilter").value;$("genreFilter").innerHTML='<option value="">Tous les genres</option>'+genres.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("");$("genreFilter").value=genres.includes(old)?old:"";
- $("navCollection").classList.toggle("active",currentView==="collection");$("navLoans").classList.toggle("active",currentView==="loans");
+ $("navCollection").classList.toggle("active",currentView==="collection");$("navReservations").classList.toggle("active",currentView==="reservations");$("navLoans").classList.toggle("active",currentView==="loans");
  $("navAdd").classList.remove("active");$("navBackup").classList.remove("active");
 }
 async function refresh(){movies=(await allMovies()).map(normalizeMovie);render()}
@@ -289,6 +295,75 @@ async function importBackup(file){
  }catch(e){$("backupMessage").textContent="Impossible de restaurer ce fichier : "+e.message}
  $("importFile").value="";
 }
+
+// Réservations : accès direct par API Supabase, soumis aux règles RLS côté serveur.
+function publicKey(){return localStorage.getItem("pitouSupabasePublicKey")||""}
+function reservationMessage(message){$("reservationMessage").textContent=message}
+function showReservationPanels(){
+ const configured=!!publicKey();
+ $("reservationConfig").classList.toggle("hidden",configured);
+ $("reservationLogin").classList.toggle("hidden",!configured||!!adminSession);
+ $("reservationDashboard").classList.toggle("hidden",!configured||!adminSession);
+}
+async function supabaseRequest(path,options={}){
+ const key=publicKey();if(!key)throw new Error("Configure la clé publique dans les paramètres.");
+ const headers={apikey:key,"Content-Type":"application/json",...(options.headers||{})};
+ if(adminSession?.access_token&&!path.startsWith("/auth/v1/"))headers.Authorization="Bearer "+adminSession.access_token;
+ const response=await fetch(SUPABASE_URL+path,{...options,headers});
+ const raw=await response.text();let data;try{data=raw?JSON.parse(raw):null}catch{data=null}
+ if(!response.ok)throw new Error(data?.msg||data?.error_description||data?.message||data?.error||"Erreur Supabase ("+response.status+")");
+ return data;
+}
+async function ensureAdminSession(){
+ if(!adminSession)return false;
+ if(Date.now()<adminSession.expires_at-60000)return true;
+ try{
+  const session=await supabaseRequest("/auth/v1/token?grant_type=refresh_token",{method:"POST",body:JSON.stringify({refresh_token:adminSession.refresh_token})});
+  if(session.user?.id!==ADMIN_UID)throw new Error("Compte non autorisé.");
+  adminSession={...session,expires_at:Date.now()+session.expires_in*1000};
+  sessionStorage.setItem("pitouAdminSession",JSON.stringify(adminSession));return true;
+ }catch{adminSession=null;sessionStorage.removeItem("pitouAdminSession");showReservationPanels();reservationMessage("Session expirée : reconnecte-toi.");return false}
+}
+async function loginAdmin(event){
+ event.preventDefault();reservationMessage("Connexion en cours…");
+ try{
+  const session=await supabaseRequest("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email:$("adminEmail").value.trim(),password:$("adminPassword").value})});
+  if(session.user?.id!==ADMIN_UID)throw new Error("Ce compte n'est pas autorisé à gérer les réservations.");
+  adminSession={...session,expires_at:Date.now()+session.expires_in*1000};
+  sessionStorage.setItem("pitouAdminSession",JSON.stringify(adminSession));$("adminPassword").value="";
+  showReservationPanels();await loadReservations();
+ }catch(error){reservationMessage("Connexion impossible : "+error.message)}
+}
+function reservationCard(r){
+ const status=r.statut||"en_attente";
+ const statusLabel={en_attente:"En attente",acceptee:"Acceptée",refusee:"Refusée"}[status]||status;
+ const name=[r.prenom,r.nom].filter(Boolean).join(" ");
+ const movie=movies.find(m=>m.id===r.film_id);
+ const title=publicFilmTitles[r.film_id]||movie?.title||"DVD n° "+r.film_id;
+ return `<article class="reservation-card"><div class="reservation-card-top"><strong>${esc(title)}</strong><span class="reservation-status">${esc(statusLabel)}</span></div><p><strong>Demandeur :</strong> ${esc(name)}</p>${r.email?`<p><strong>E-mail :</strong> ${esc(r.email)}</p>`:""}${r.message?`<p><strong>Message :</strong> ${esc(r.message)}</p>`:""}<p class="muted small">${esc(new Date(r.created_at).toLocaleString("fr-FR"))}</p>${status==="en_attente"?`<div class="reservation-actions"><button type="button" class="primary" data-reservation-id="${esc(r.id)}" data-status="acceptee">Accepter</button><button type="button" class="danger-button" data-reservation-id="${esc(r.id)}" data-status="refusee">Refuser</button></div>`:""}</article>`;
+}
+async function loadReservations(){
+ if(!await ensureAdminSession())return;
+ reservationMessage("Chargement des demandes…");
+ try{
+  const publicFilms=await supabaseRequest("/rest/v1/films_publics?select=id,titre&limit=1000");
+  publicFilmTitles=Object.fromEntries(publicFilms.map(f=>[f.id,f.titre]));
+  const list=await supabaseRequest("/rest/v1/reservations?select=id,film_id,prenom,nom,email,message,statut,created_at&order=created_at.desc&limit=200",{headers:{Accept:"application/json"}});
+  $("reservationList").innerHTML=list.length?list.map(reservationCard).join(""):'<p class="muted">Aucune demande de réservation.</p>';
+  reservationMessage(list.length?`${list.length} demande(s) affichée(s).`:"Aucune demande pour le moment.");
+ }catch(error){reservationMessage("Impossible de charger les réservations : "+error.message)}
+}
+async function changeReservationStatus(id,status){
+ if(!["acceptee","refusee"].includes(status)||!await ensureAdminSession())return;
+ if(!confirm(status==="acceptee"?"Accepter cette réservation ?":"Refuser cette réservation ?"))return;
+ reservationMessage("Mise à jour en cours…");
+ try{
+  const result=await supabaseRequest("/rest/v1/reservations?id=eq."+encodeURIComponent(id)+"&statut=eq.en_attente",{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({statut:status})});
+  if(!Array.isArray(result)||result.length!==1)throw new Error("Demande déjà traitée ou introuvable.");
+  await loadReservations();toast(status==="acceptee"?"Réservation acceptée":"Réservation refusée");
+ }catch(error){reservationMessage("Modification impossible : "+error.message)}
+}
+
 function wire(){
  $("searchInput").addEventListener("input",render);["genreFilter","statusFilter","sortSelect"].forEach(id=>$(id).addEventListener("change",render));
  $("movieGrid").addEventListener("click",e=>{const card=e.target.closest(".movie-card");if(card)showDetails(card.dataset.id)});
@@ -296,15 +371,21 @@ function wire(){
  $("movieForm").addEventListener("submit",submitMovie);
  $("movieLoaned").addEventListener("change",()=> $("loanFields").classList.toggle("hidden",!$("movieLoaned").checked));
  $("navCollection").onclick=()=>{currentView="collection";$("statusFilter").value="all";render();window.scrollTo({top:0,behavior:"smooth"})};
- $("navLoans").onclick=()=>{currentView="loans";$("statusFilter").value="loaned";render();window.scrollTo({top:0,behavior:"smooth"})};
+ $("navReservations").onclick=()=>{currentView="reservations";render();showReservationPanels();if(adminSession)loadReservations();window.scrollTo({top:0,behavior:"smooth"})};
+  $("reservationSettings").onclick=()=>$("settingsBtn").click();
+  $("reservationLogin").addEventListener("submit",loginAdmin);
+  $("reservationRefresh").onclick=loadReservations;
+  $("reservationLogout").onclick=()=>{adminSession=null;sessionStorage.removeItem("pitouAdminSession");showReservationPanels();reservationMessage("Déconnecté.")};
+  $("reservationList").addEventListener("click",e=>{const button=e.target.closest("button[data-reservation-id]");if(button)changeReservationStatus(button.dataset.reservationId,button.dataset.status)});
+  $("navLoans").onclick=()=>{currentView="loans";$("statusFilter").value="loaned";render();window.scrollTo({top:0,behavior:"smooth"})};
  const addAction=()=>{openSearch()};
  $("manualAddBtn").onclick=()=>{closeDialog($("searchDialog"));formMovie({})};
  $("scanAddBtn").onclick=()=>{closeDialog($("searchDialog"));formMovie({});startScanner()};
  $("navAdd").onclick=addAction;$("emptyAddBtn").onclick=addAction;
  $("scanFromForm").onclick=()=>startScanner();
  $("searchForm").addEventListener("submit",e=>{e.preventDefault();if($("tmdbQuery").value.trim())searchTMDB($("tmdbQuery").value.trim())});
- $("settingsBtn").onclick=()=>{const s=settings();$("tmdbKey").value=s.key;$("collectionName").value=s.name;openDialog($("settingsDialog"))};
- $("settingsForm").addEventListener("submit",e=>{e.preventDefault();localStorage.setItem("tmdbKey",$("tmdbKey").value.trim());localStorage.setItem("collectionName",$("collectionName").value.trim()||"Les Films de Pitou");document.querySelector(".brand h1").textContent=localStorage.getItem("collectionName");closeDialog($("settingsDialog"));toast("Paramètres enregistrés")});
+ $("settingsBtn").onclick=()=>{const s=settings();$("tmdbKey").value=s.key;$("collectionName").value=s.name;$("supabasePublicKey").value=publicKey();openDialog($("settingsDialog"))};
+ $("settingsForm").addEventListener("submit",e=>{e.preventDefault();localStorage.setItem("tmdbKey",$("tmdbKey").value.trim());localStorage.setItem("collectionName",$("collectionName").value.trim()||"Les Films de Pitou");const newKey=$("supabasePublicKey").value.trim();if(newKey&&!newKey.startsWith("sb_publishable_")){toast("Utilise uniquement une clé sb_publishable_");return}localStorage.setItem("pitouSupabasePublicKey",newKey);showReservationPanels();document.querySelector(".brand h1").textContent=localStorage.getItem("collectionName");closeDialog($("settingsDialog"));toast("Paramètres enregistrés")});
  $("navBackup").onclick=()=>{$("backupMessage").textContent="";openDialog($("backupDialog"))};
  $("exportBtn").onclick=exportBackup;$("importFile").addEventListener("change",e=>{const f=e.target.files?.[0];if(f)importBackup(f)});
  $("useManualBarcode").onclick=useManualBarcode;$("stopScan").onclick=()=>{stopScanner();closeDialog($("scanDialog"))};
@@ -314,7 +395,7 @@ async function init(){
  try{
  const previousName=localStorage.getItem("collectionName");
  if(!previousName||previousName==="Ma DVDthèque")localStorage.setItem("collectionName","Les Films de Pitou");
- db=await openDB();wire();document.querySelector(".brand h1").textContent=settings().name;await refresh();if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});}
+ try{const stored=JSON.parse(sessionStorage.getItem("pitouAdminSession")||"null");if(stored?.user?.id===ADMIN_UID)adminSession=stored}catch{}db=await openDB();wire();showReservationPanels();document.querySelector(".brand h1").textContent=settings().name;await refresh();if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});}
  catch(e){alert("Impossible d’ouvrir la base de données locale. Essaie avec Chrome en mode normal.");console.error(e)}
 }
 document.addEventListener("DOMContentLoaded",init);
