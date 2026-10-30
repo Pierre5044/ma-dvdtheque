@@ -364,6 +364,46 @@ async function changeReservationStatus(id,status){
  }catch(error){reservationMessage("Modification impossible : "+error.message)}
 }
 
+
+// Test contrôlé : n'envoie que le DVD fictif, jamais la collection entière.
+async function sendTestMovieToSupabase(){
+  if(!await ensureAdminSession()){reservationMessage("Connecte-toi comme administrateur avant le test.");return;}
+  const testMovies=movies.filter(m=>["dvd test – synchronisation","dvd test - synchronisation"].includes(m.title.trim().toLocaleLowerCase("fr")));
+  if(testMovies.length!==1){reservationMessage("Test interrompu : il faut exactement un DVD TEST sur ce téléphone (trouvés : "+testMovies.length+").");return;}
+  const m=testMovies[0];
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(m.id)){
+    reservationMessage("Test interrompu : identifiant local incompatible avec Supabase.");return;
+  }
+  if(!confirm("Envoyer uniquement « "+m.title+" » vers Supabase ? Aucun autre DVD ne sera modifié."))return;
+  reservationMessage("Vérification des doublons…");
+  try{
+    const byId=await supabaseRequest("/rest/v1/films?select=id,titre&id=eq."+encodeURIComponent(m.id));
+    const byTitle=await supabaseRequest("/rest/v1/films?select=id,titre&titre=ilike."+encodeURIComponent("%DVD TEST%")+"&limit=20");
+    if(byId.length||byTitle.length){reservationMessage("Envoi annulé : DVD TEST déjà présent dans Supabase. Aucun doublon créé.");return;}
+    const year=String(m.year||"").trim(), tmdb=String(m.tmdbId||"").trim();
+    const payload={
+      id:m.id,titre:m.title,annee:year?Number(year):null,
+      genre:m.genres.join(", "),resume:m.overview||"",affiche_url:m.poster||"",
+      tmdb_id:tmdb?Number(tmdb):null,code_barres:m.barcode||"",
+      disponible:!m.loaned,realisateur:m.director||"",notes:m.notes||"",
+      duree:m.runtime?String(m.runtime):"",est_prete:!!m.loaned,
+      prenom_emprunteur:m.loaned?m.borrowerFirst:"",
+      nom_emprunteur:m.loaned?m.borrowerLast:"",
+      date_pret:m.loaned?(m.loanDate||null):null,
+      historique_prets:m.loanHistory||[],
+      date_ajout:m.addedAt||new Date().toISOString(),est_reserve:false
+    };
+    if(!Number.isFinite(payload.annee))payload.annee=null;
+    if(!Number.isFinite(payload.tmdb_id))payload.tmdb_id=null;
+    const saved=await supabaseRequest("/rest/v1/films",{
+      method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify(payload)
+    });
+    if(!Array.isArray(saved)||saved.length!==1)throw new Error("Enregistrement non confirmé.");
+    reservationMessage("✓ DVD TEST envoyé dans Supabase. Vérifie le résultat dans SQL Editor.");
+    toast("DVD TEST envoyé à Supabase");
+  }catch(error){reservationMessage("Envoi non confirmé : "+error.message+". Vérifie Supabase avant de réessayer.");}
+}
+
 function wire(){
  $("searchInput").addEventListener("input",render);["genreFilter","statusFilter","sortSelect"].forEach(id=>$(id).addEventListener("change",render));
  $("movieGrid").addEventListener("click",e=>{const card=e.target.closest(".movie-card");if(card)showDetails(card.dataset.id)});
@@ -375,6 +415,7 @@ function wire(){
   $("reservationSettings").onclick=()=>$("settingsBtn").click();
   $("reservationLogin").addEventListener("submit",loginAdmin);
   $("reservationRefresh").onclick=loadReservations;
+  $("syncTestMovie").onclick=sendTestMovieToSupabase;
   $("reservationLogout").onclick=()=>{adminSession=null;sessionStorage.removeItem("pitouAdminSession");showReservationPanels();reservationMessage("Déconnecté.")};
   $("reservationList").addEventListener("click",e=>{const button=e.target.closest("button[data-reservation-id]");if(button)changeReservationStatus(button.dataset.reservationId,button.dataset.status)});
   $("navLoans").onclick=()=>{currentView="loans";$("statusFilter").value="loaned";render();window.scrollTo({top:0,behavior:"smooth"})};
