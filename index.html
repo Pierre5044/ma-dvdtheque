@@ -7,7 +7,7 @@
   <meta name="description" content="Ma vidéothèque DVD personnelle">
   <link rel="manifest" href="manifest.json?v=7">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=8">
   <title>Les Films de Pitou</title>
 </head>
 <body>
@@ -16,7 +16,8 @@
   <button id="settingsBtn" class="icon-button" aria-label="Paramètres" title="Paramètres">⚙</button>
 </header>
 <main>
-  <section class="stats" aria-label="Résumé de la collection">
+  <section id="collectionArea">
+   <section class="stats" aria-label="Résumé de la collection">
     <div><strong id="totalCount">0</strong><span>DVD</span></div>
     <div><strong id="loanCount">0</strong><span>Prêtés</span></div>
     <div><strong id="genreCount">0</strong><span>Genres</span></div>
@@ -36,11 +37,21 @@
   <div class="section-heading"><h2>Ma collection</h2><span id="resultCount" class="muted">0 résultat</span></div>
   <section id="movieGrid" class="movie-grid" aria-live="polite"></section>
   <div id="emptyState" class="empty-state"><div class="empty-icon">🎬</div><h3>Ta vidéothèque commence ici</h3><p>Ajoute un film par son titre ou scanne le code-barres de son boîtier.</p><button class="primary" id="emptyAddBtn">＋ Ajouter un DVD</button></div>
+  </section>
+  <section id="reservationArea" class="hidden" aria-label="Réservations">
+    <div class="section-heading"><h2>Réservations</h2></div>
+    <p class="muted small">Espace administrateur privé. Les demandes proviennent de la page familiale.</p>
+    <div id="reservationConfig" class="reservation-panel hidden"><p>Configure d’abord la clé publique Supabase dans ⚙ Paramètres.</p><button id="reservationSettings" class="secondary">Ouvrir les paramètres</button></div>
+    <form id="reservationLogin" class="reservation-panel hidden"><h3>Connexion administrateur</h3><label>Adresse e-mail<input id="adminEmail" type="email" required autocomplete="username" value="pplace@hotmail.fr"></label><label>Mot de passe<input id="adminPassword" type="password" required autocomplete="current-password"></label><button type="submit" class="primary">Se connecter</button></form>
+    <div id="reservationDashboard" class="hidden"><div class="reservation-controls"><button id="reservationRefresh" class="secondary">↻ Actualiser</button><button id="reservationLogout" class="secondary">Se déconnecter</button></div><div id="reservationList" class="reservation-list"></div></div>
+    <p id="reservationMessage" class="form-message" role="status"></p>
+  </section>
 </main>
 <nav class="bottom-nav">
   <button id="navCollection" class="nav-item active"><span>▦</span>Collection</button>
   <button id="navLoans" class="nav-item"><span>↗</span>DVD prêtés</button>
-  <button id="navAdd" class="nav-item"><span>＋</span>Ajouter</button>
+  <button id="navReservations" class="nav-item"><span>✉</span>Réservations</button>
+   <button id="navAdd" class="nav-item"><span>＋</span>Ajouter</button>
   <button id="navBackup" class="nav-item"><span>⇅</span>Sauvegarde</button>
 </nav>
 
@@ -102,6 +113,8 @@
     <label>Clé API TMDB <input id="tmdbKey" type="password" autocomplete="off" placeholder="Clé API v3 (authentification)"></label>
     <p class="muted small">Obtiens une clé gratuite depuis ton compte TMDB, dans les paramètres API. Elle est enregistrée uniquement dans le stockage local de ce navigateur.</p>
     <label>Nom affiché de la collection<input id="collectionName" maxlength="80" placeholder="Les Films de Pitou"></label>
+     <label>Clé publique Supabase (sb_publishable_)<input id="supabasePublicKey" type="password" autocomplete="off" placeholder="sb_publishable_..."></label>
+     <p class="muted small">Ne colle jamais de clé secrète ou service_role ici. La clé publique est enregistrée sur cet appareil.</p>
     <div class="dialog-actions"><button type="button" class="secondary close-dialog">Fermer</button><button type="submit" class="primary">Enregistrer</button></div>
     <p class="muted tiny">Les affiches et informations TMDB restent soumises aux conditions de TMDB. Voir le fichier README inclus.</p>
   </form>
@@ -117,6 +130,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <footer class="attribution">Données de films : TMDB lorsque configuré. Cette application n’est ni approuvée ni certifiée par TMDB.</footer>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
