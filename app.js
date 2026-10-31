@@ -124,7 +124,14 @@ async function pushMovie(m,previous){
  if(existing.length>1)throw new Error('Identifiant présent plusieurs fois dans Supabase.');
  if(existing.length){
   if(!previous)throw new Error('Ce DVD existe déjà dans Supabase. Modification annulée.');
-  if(loanState(previous)!==remoteLoanState(existing[0]))throw new Error('Le prêt a changé dans Supabase depuis le chargement local. Actualise tes données avant de modifier ce DVD.');
+  if(loanState(previous)!==remoteLoanState(existing[0])){
+  throw new Error(
+    'Comparaison des prêts : local=' +
+    loanState(previous) +
+    ' / Supabase=' +
+    remoteLoanState(existing[0])
+  );
+}
   const saved=await supabaseRequest('/rest/v1/films?id=eq.'+encodeURIComponent(m.id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(remoteMoviePayload(m))});
   if(!Array.isArray(saved)||saved.length!==1)throw new Error('Mise à jour non confirmée par Supabase.');
  }else{
