@@ -97,6 +97,15 @@ function remoteMoviePayload(m){
   nom_emprunteur:m.loaned?m.borrowerLast:'',date_pret:m.loaned?(m.loanDate||null):null,
   historique_prets:m.loanHistory||[],date_ajout:m.addedAt};
 }
+  function normalizeLoanHistory(history) {
+  return (Array.isArray(history) ? history : []).map(h => ({
+    borrowerFirst: h.borrowerFirst || "",
+    borrowerLast: h.borrowerLast || "",
+    loanDate: h.loanDate || "",
+    returnedAt: h.returnedAt || "",
+    note: h.note || ""
+  }));
+}
 function loanState(m){
   if(!m.loaned) return JSON.stringify([false]);
   return JSON.stringify([
@@ -104,7 +113,7 @@ function loanState(m){
     m.borrowerFirst || '',
     m.borrowerLast || '',
     m.loanDate || '',
-    m.loanHistory || []
+    normalizeLoanHistory(m.loanHistory)
   ]);
 }
 
@@ -115,7 +124,7 @@ function remoteLoanState(r){
     r.prenom_emprunteur || '',
     r.nom_emprunteur || '',
     r.date_pret || '',
-    r.historique_prets || []
+    normalizeLoanHistory(r.historique_prets)
   ]);
 }
 async function pushMovie(m,previous){
