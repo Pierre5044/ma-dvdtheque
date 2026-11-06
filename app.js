@@ -339,8 +339,11 @@ await refresh();
 
 if(m.reservationId){
  try{
-  await completeReturnedReservation(updated,m);
-  toast("DVD rendu et réservation clôturée");
+  
+await completeReturnedReservation(updated,m);
+await clearCompletedReservationLink(updated);
+toast("DVD rendu, réservation clôturée et lien nettoyé");
+
  }catch(error){
   alert(
    "Le retour du DVD est enregistré, mais la réservation reste à clôturer.\n\n"+
