@@ -263,7 +263,24 @@ async function showDetails(id){
  $("editMovieBtn").onclick=()=>{closeDialog($("detailsDialog"));formMovie(m)};
  $("deleteMovieBtn").onclick=async()=>{if(confirm(`Supprimer « ${m.title} » de la collection ?`)){try{await removeMovieFromSupabase(m);await deleteMovie(m.id);closeDialog($("detailsDialog"));await refresh();toast("DVD supprimé et synchronisé")}catch(error){alert("Suppression annulée : "+error.message)}}};
  const loanBtn=$("returnMovieBtn")||$("loanMovieBtn");
- loanBtn.onclick=async()=>{closeDialog($("detailsDialog"));if(m.loaned){const updated={...m,loaned:false,loanHistory:[...m.loanHistory,{borrowerFirst:m.borrowerFirst,borrowerLast:m.borrowerLast,loanDate:m.loanDate,returnedAt:dateToday()}],borrowerFirst:"",borrowerLast:"",loanDate:""};try{await pushMovie(updated,m);await saveMovie(updated);await refresh();toast("Retour synchronisé avec Supabase")}catch(error){alert("Retour non enregistré : "+error.message)}}else formMovie({...m,loaned:true,loanDate:dateToday()})};
+ loanBtn.onclick=async()=>{closeDialog($("detailsDialog"));if(m.loaned){const updated={...m,loaned:false,loanHistory:[...m.loanHistory,{borrowerFirst:m.borrowerFirst,borrowerLast:m.borrowerLast,loanDate:m.loanDate,returnedAt:dateToday()}],borrowerFirst:"",borrowerLast:"",loanDate:""};try{await pushMovie(updated,m);
+await saveMovie(updated);
+await refresh();
+
+if(m.reservationId){
+ try{
+  await completeReturnedReservation(updated,m);
+  toast("DVD rendu et réservation clôturée");
+ }catch(error){
+  alert(
+   "Le retour du DVD est enregistré, mais la réservation reste à clôturer.\n\n"+
+   error.message
+  );
+ }
+}else{
+ toast("Retour synchronisé avec Supabase");
+}
+}catch(error){alert("Retour non enregistré : "+error.message)}}else formMovie({...m,loaned:true,loanDate:dateToday()})};
  openDialog($("detailsDialog"));
  loadTrailerForMovie(m, $("detailsContent").querySelector("#trailerArea"));
  // Les DVD ajoutés avant cette amélioration récupèrent leur résumé à la première ouverture.
