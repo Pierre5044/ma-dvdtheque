@@ -205,6 +205,7 @@ async function completeReturnedReservation(m,previous){
   return;
  }
 
+
 async function retryReturnedReservations(){
  if(!await ensureAdminSession())return;
 
@@ -214,16 +215,25 @@ async function retryReturnedReservations(){
 
  for(const m of pending){
   try{
-   await completeReturnedReservation(
-    m,
-    {...m,loaned:true}
+   const reservations=await supabaseRequest(
+    '/rest/v1/reservations?select=id,statut,film_id&id=eq.'+
+    encodeURIComponent(m.reservationId)
    );
+
+   const reservation=reservations[0];
+
+   if(!reservation || reservation.film_id!==m.id){
+    console.warn("Liaison de réservation introuvable :",m.title);
+    continue;
+   }
+
+   if(reservation.statut==='acceptee'){
+    await completeReturnedReservation(m,{...m,loaned:true});
+   }else if(reservation.statut!=='terminee'){
+    console.warn("Réservation non clôturable :",m.title);
+   }
   }catch(error){
-   console.warn(
-    "Réservation restant à clôturer :",
-    m.title,
-    error.message
-   );
+   console.warn("Clôture à réessayer :",m.title,error.message);
   }
  }
 }
