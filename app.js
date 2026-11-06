@@ -529,3 +529,4 @@ async function init(){
 }
 document.addEventListener("DOMContentLoaded",init);
 })();
+// Relance de publication GitHub Pages - V10
