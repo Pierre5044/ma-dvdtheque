@@ -95,6 +95,7 @@ function remoteMoviePayload(m){
   affiche_url:m.poster||'',tmdb_id:num(m.tmdbId),code_barres:m.barcode||'',
   realisateur:m.director||'',notes:m.notes||'',duree:String(m.runtime||''),
   est_prete:!!m.loaned,prenom_emprunteur:m.loaned?m.borrowerFirst:'',
+         ...(m.reservationId ? {reservation_id:m.reservationId} : {}),
   nom_emprunteur:m.loaned?m.borrowerLast:'',date_pret:m.loaned?(m.loanDate||null):null,
   historique_prets:m.loanHistory||[],date_ajout:m.addedAt};
 }
