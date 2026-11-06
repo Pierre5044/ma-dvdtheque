@@ -24,7 +24,8 @@ function deleteMovie(id){return new Promise((resolve,reject)=>{const tx=db.trans
 function replaceAll(list){return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite"),s=tx.objectStore(STORE);s.clear();list.forEach(m=>s.put(m));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
 function settings(){return {key:localStorage.getItem("tmdbKey")||"",name:localStorage.getItem("collectionName")||"Les Films de Pitou"}}
 function normalizeGenres(value){return [...new Set(String(value||"").split(",").map(x=>x.trim()).filter(Boolean))]}
-function normalizeMovie(m){return {id:m.id||uid(),title:String(m.title||"Sans titre"),year:m.year||"",director:m.director||"",genres:Array.isArray(m.genres)?m.genres:normalizeGenres(m.genres),barcode:m.barcode||"",poster:m.poster||"",notes:m.notes||"",overview:m.overview||"",runtime:m.runtime||"",loaned:!!m.loaned,borrowerFirst:m.borrowerFirst||"",borrowerLast:m.borrowerLast||"",loanDate:m.loanDate||"",loanHistory:Array.isArray(m.loanHistory)?m.loanHistory:[],addedAt:m.addedAt||new Date().toISOString(),tmdbId:m.tmdbId||""}}
+function normalizeMovie(m){return {id:m.id||uid(),title:String(m.title||"Sans titre"),year:m.year||"",director:m.director||"",genres:Array.isArray(m.genres)?m.genres:normalizeGenres(m.genres),barcode:m.barcode||"",poster:m.poster||"",notes:m.notes||"",overview:m.overview||"",runtime:m.runtime||"",loaned:!!m.loaned,
+reservationId:m.reservationId||null,borrowerFirst:m.borrowerFirst||"",borrowerLast:m.borrowerLast||"",loanDate:m.loanDate||"",loanHistory:Array.isArray(m.loanHistory)?m.loanHistory:[],addedAt:m.addedAt||new Date().toISOString(),tmdbId:m.tmdbId||""}}
 function movieMatches(m,q){const hay=[m.title,m.year,m.director,...m.genres,m.barcode,m.borrowerFirst,m.borrowerLast,m.notes].join(" ").toLocaleLowerCase("fr");return hay.includes(q.toLocaleLowerCase("fr"))}
 function render(){
   $("collectionArea").classList.toggle("hidden",currentView==="reservations");
