@@ -159,6 +159,11 @@ async function findAcceptedReservation(m){
 
 async function pushMovie(m,previous){
  if(!await ensureAdminSession())throw new Error('Connecte-toi dans Réservations pour synchroniser les DVD. Rien n’a été modifié.');
+  
+ if(m.loaned && !previous?.loaned && !m.reservationId){
+  m.reservationId=await findAcceptedReservation(m);
+ }
+
  const existing=await supabaseRequest('/rest/v1/films?select=id,titre,est_prete,prenom_emprunteur,nom_emprunteur,date_pret,historique_prets&id=eq.'+encodeURIComponent(m.id));
  if(existing.length>1)throw new Error('Identifiant présent plusieurs fois dans Supabase.');
  if(existing.length){
