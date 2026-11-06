@@ -129,6 +129,34 @@ function remoteLoanState(r){
     normalizeLoanHistory(r.historique_prets)
   ]);
 }
+  
+async function findAcceptedReservation(m){
+ if(!m.loaned)return null;
+
+ const reservations=await supabaseRequest(
+  '/rest/v1/reservations?select=id,prenom,nom,film_id' +
+  '&film_id=eq.'+encodeURIComponent(m.id) +
+  '&statut=eq.acceptee'
+ );
+
+ const normalizeName=value=>String(value||'')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g,'')
+  .trim()
+  .toLocaleLowerCase('fr-FR');
+
+ const matches=reservations.filter(r=>
+  normalizeName(r.prenom)===normalizeName(m.borrowerFirst) &&
+  normalizeName(r.nom)===normalizeName(m.borrowerLast)
+ );
+
+ if(matches.length>1){
+  throw new Error('Plusieurs réservations correspondent à cet emprunteur.');
+ }
+
+ return matches[0]?.id||null;
+}
+
 async function pushMovie(m,previous){
  if(!await ensureAdminSession())throw new Error('Connecte-toi dans Réservations pour synchroniser les DVD. Rien n’a été modifié.');
  const existing=await supabaseRequest('/rest/v1/films?select=id,titre,est_prete,prenom_emprunteur,nom_emprunteur,date_pret,historique_prets&id=eq.'+encodeURIComponent(m.id));
