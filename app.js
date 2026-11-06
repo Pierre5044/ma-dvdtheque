@@ -1,3 +1,4 @@
+/* Nouvelle tentative de publication GitHub Pages */
 /* Ma DVDthèque — données conservées localement dans IndexedDB */
 (() => {
 "use strict";
