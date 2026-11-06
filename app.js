@@ -205,6 +205,29 @@ async function completeReturnedReservation(m,previous){
   return;
  }
 
+async function retryReturnedReservations(){
+ if(!await ensureAdminSession())return;
+
+ const pending=movies.filter(m=>
+  !m.loaned && m.reservationId
+ );
+
+ for(const m of pending){
+  try{
+   await completeReturnedReservation(
+    m,
+    {...m,loaned:true}
+   );
+  }catch(error){
+   console.warn(
+    "Réservation restant à clôturer :",
+    m.title,
+    error.message
+   );
+  }
+ }
+}
+
  const result=await supabaseRequest(
   '/rest/v1/reservations?id=eq.'+
   encodeURIComponent(previous.reservationId)+
