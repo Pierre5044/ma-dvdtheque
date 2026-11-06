@@ -616,8 +616,12 @@ function reservationCard(r){
  return `<article class="reservation-card"><div class="reservation-card-top"><strong>${esc(title)}</strong><span class="reservation-status">${esc(statusLabel)}</span></div><p><strong>Demandeur :</strong> ${esc(name)}</p>${r.email?`<p><strong>E-mail :</strong> ${esc(r.email)}</p>`:""}${r.message?`<p><strong>Message :</strong> ${esc(r.message)}</p>`:""}<p class="muted small">${esc(new Date(r.created_at).toLocaleString("fr-FR"))}</p>${status==="en_attente"?`<div class="reservation-actions"><button type="button" class="primary" data-reservation-id="${esc(r.id)}" data-status="acceptee">Accepter</button><button type="button" class="danger-button" data-reservation-id="${esc(r.id)}" data-status="refusee">Refuser</button></div>`:""}</article>`;
 }
 async function loadReservations(){
- if(!await ensureAdminSession())return;
- reservationMessage("Chargement des demandes…");
+
+if(!await ensureAdminSession())return;
+reservationMessage("Vérification des retours en attente…");
+await retryReturnedReservations();
+reservationMessage("Chargement des demandes…");
+
  try{
   const publicFilms=await supabaseRequest("/rest/v1/films_publics?select=id,titre&limit=1000");
   publicFilmTitles=Object.fromEntries(publicFilms.map(f=>[f.id,f.titre]));
