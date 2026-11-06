@@ -295,11 +295,16 @@ async function retryReturnedReservations(){
     continue;
    }
 
-   if(reservation.statut==='acceptee'){
-    await completeReturnedReservation(m,{...m,loaned:true});
-   }else if(reservation.statut!=='terminee'){
-    console.warn("Réservation non clôturable :",m.title);
-   }
+
+if(reservation.statut==='acceptee'){
+ await completeReturnedReservation(m,{...m,loaned:true});
+ await clearCompletedReservationLink(m);
+}else if(reservation.statut==='terminee'){
+ await clearCompletedReservationLink(m);
+}else{
+ console.warn("Réservation non clôturable :",m.title);
+}
+
   }catch(error){
    console.warn("Clôture à réessayer :",m.title,error.message);
   }
