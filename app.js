@@ -207,23 +207,53 @@ async function completeReturnedReservation(m,previous){
  }
 
 
+
 async function clearCompletedReservationLink(m){
  if(m.loaned || !m.reservationId)return;
 
  const id=m.reservationId;
-
  const reservations=await supabaseRequest(
   '/rest/v1/reservations?select=id,film_id,statut&id=eq.'+
   encodeURIComponent(id)
  );
 
- if(
-  reservations.length!==1 ||
-  reservations[0].film_id!==m.id ||
-  reservations[0].statut!=='terminee'
- ){
+ if(reservations.length!==1 ||
+    reservations[0].film_id!==m.id ||
+    reservations[0].statut!=='terminee'){
   throw new Error('La clôture de la réservation n’est pas confirmée.');
  }
+
+ const films=await supabaseRequest(
+  '/rest/v1/films?select=id,reservation_id,est_prete&id=eq.'+
+  encodeURIComponent(m.id)
+ );
+
+ if(films.length!==1 || films[0].est_prete){
+  throw new Error('Le retour du DVD n’est pas confirmé dans Supabase.');
+ }
+
+ if(films[0].reservation_id===id){
+  const saved=await supabaseRequest(
+   '/rest/v1/films?id=eq.'+encodeURIComponent(m.id)+
+   '&reservation_id=eq.'+encodeURIComponent(id)+
+   '&est_prete=eq.false',
+   {
+    method:'PATCH',
+    headers:{Prefer:'return=representation'},
+    body:JSON.stringify({reservation_id:null})
+   }
+  );
+
+  if(!Array.isArray(saved)||saved.length!==1){
+   throw new Error('Nettoyage du lien non confirmé.');
+  }
+ }else if(films[0].reservation_id!==null){
+  throw new Error('Le DVD est lié à une autre réservation.');
+ }
+
+ await saveMovie({...m,reservationId:null});
+}
+
 
  const saved=await supabaseRequest(
   '/rest/v1/films?id=eq.'+encodeURIComponent(m.id)+
