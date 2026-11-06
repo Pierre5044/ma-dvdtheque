@@ -201,14 +201,33 @@ async function removeMovieFromSupabase(m){
  if(!Array.isArray(deleted)||deleted.length!==1)throw new Error('Suppression non confirmée.');
 }
 
+
 async function completeReturnedReservation(m,previous){
  if(!previous?.loaned || m.loaned || !previous.reservationId){
   return;
  }
 
+ const result=await supabaseRequest(
+  '/rest/v1/reservations?id=eq.'+
+  encodeURIComponent(previous.reservationId)+
+  '&film_id=eq.'+encodeURIComponent(m.id)+
+  '&statut=eq.acceptee',
+  {
+   method:'PATCH',
+   headers:{Prefer:'return=representation'},
+   body:JSON.stringify({statut:'terminee'})
+  }
+ );
 
+ if(!Array.isArray(result)||result.length!==1){
+  throw new Error(
+   'Le retour du DVD est enregistré, mais la réservation n’a pas pu être clôturée automatiquement.'
+  );
+ }
+}
 
 async function clearCompletedReservationLink(m){
+
  if(m.loaned || !m.reservationId)return;
 
  const id=m.reservationId;
