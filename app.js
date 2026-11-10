@@ -706,7 +706,19 @@ async function sendTestMovieToSupabase(){
 
 function wire(){
  $("searchInput").addEventListener("input",render);["genreFilter","statusFilter","sortSelect"].forEach(id=>$(id).addEventListener("change",render));
- $("movieGrid").addEventListener("click",e=>{const card=e.target.closest(".movie-card");if(card)showDetails(card.dataset.id)});
+ 
+$("movieGrid").addEventListener("click",e=>{
+  const favoriteButton=e.target.closest(".favorite-btn");
+  if(favoriteButton){
+    e.stopPropagation();
+    toggleFavorite(favoriteButton.dataset.favoriteId);
+    return;
+  }
+
+  const card=e.target.closest(".movie-card");
+  if(card)showDetails(card.dataset.id);
+});
+
  $("movieGrid").addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("movie-card")){e.preventDefault();showDetails(e.target.dataset.id)}});
  $("movieForm").addEventListener("submit",submitMovie);
  $("movieLoaned").addEventListener("change",()=> $("loanFields").classList.toggle("hidden",!$("movieLoaned").checked));
