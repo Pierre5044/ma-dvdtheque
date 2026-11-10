@@ -27,7 +27,39 @@ function settings(){return {key:localStorage.getItem("tmdbKey")||"",name:localSt
 function normalizeGenres(value){return [...new Set(String(value||"").split(",").map(x=>x.trim()).filter(Boolean))]}
 function normalizeMovie(m){return {id:m.id||uid(),title:String(m.title||"Sans titre"),year:m.year||"",director:m.director||"",genres:Array.isArray(m.genres)?m.genres:normalizeGenres(m.genres),barcode:m.barcode||"",poster:m.poster||"",notes:m.notes||"",overview:m.overview||"",runtime:m.runtime||"",loaned:!!m.loaned,
 reservationId:m.reservationId||null,borrowerFirst:m.borrowerFirst||"",borrowerLast:m.borrowerLast||"",loanDate:m.loanDate||"",loanHistory:Array.isArray(m.loanHistory)?m.loanHistory:[],addedAt:m.addedAt||new Date().toISOString(),tmdbId:m.tmdbId||""}}
-function movieMatches(m,q){const hay=[m.title,m.year,m.director,...m.genres,m.barcode,m.borrowerFirst,m.borrowerLast,m.notes].join(" ").toLocaleLowerCase("fr");return hay.includes(q.toLocaleLowerCase("fr"))}
+
+const FAVORITES_KEY = "pitouFavorites";
+
+function getFavorites(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function isFavorite(id){
+  return getFavorites().includes(String(id));
+}
+
+function toggleFavorite(id){
+  const favorites = getFavorites();
+  const movieId = String(id);
+
+  const updated = favorites.includes(movieId)
+    ? favorites.filter(item => item !== movieId)
+    : [...favorites, movieId];
+
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
+    render();
+  } catch {
+    toast("Impossible d'enregistrer les favoris sur cet appareil.");
+  }
+}
+
+ function movieMatches(m,q){const hay=[m.title,m.year,m.director,...m.genres,m.barcode,m.borrowerFirst,m.borrowerLast,m.notes].join(" ").toLocaleLowerCase("fr");return hay.includes(q.toLocaleLowerCase("fr"))}
 function render(){
  
 $("collectionArea").classList.toggle("hidden",currentView==="reservations"||currentView==="favorites");
