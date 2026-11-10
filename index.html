@@ -38,6 +38,18 @@
   <section id="movieGrid" class="movie-grid" aria-live="polite"></section>
   <div id="emptyState" class="empty-state"><div class="empty-icon">🎬</div><h3>Ta vidéothèque commence ici</h3><p>Ajoute un film par son titre ou scanne le code-barres de son boîtier.</p><button class="primary" id="emptyAddBtn">＋ Ajouter un DVD</button></div>
   </section>
+  
+<section id="favoritesArea" class="hidden" aria-label="Mes favoris">
+  <div class="section-heading">
+    <h2>❤️ Mes favoris</h2>
+    <span id="favoritesCount" class="muted">0 film</span>
+  </div>
+  <p class="muted small">
+    Retrouve ici tes DVD préférés.
+  </p>
+  <section id="favoritesGrid" class="movie-grid" aria-live="polite"></section>
+</section>
+
   <section id="reservationArea" class="hidden" aria-label="Réservations">
     <div class="section-heading"><h2>Réservations</h2></div>
     <p class="muted small">Espace administrateur privé. Les demandes proviennent de la page familiale.</p>
