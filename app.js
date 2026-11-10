@@ -29,7 +29,11 @@ function normalizeMovie(m){return {id:m.id||uid(),title:String(m.title||"Sans ti
 reservationId:m.reservationId||null,borrowerFirst:m.borrowerFirst||"",borrowerLast:m.borrowerLast||"",loanDate:m.loanDate||"",loanHistory:Array.isArray(m.loanHistory)?m.loanHistory:[],addedAt:m.addedAt||new Date().toISOString(),tmdbId:m.tmdbId||""}}
 function movieMatches(m,q){const hay=[m.title,m.year,m.director,...m.genres,m.barcode,m.borrowerFirst,m.borrowerLast,m.notes].join(" ").toLocaleLowerCase("fr");return hay.includes(q.toLocaleLowerCase("fr"))}
 function render(){
-  $("collectionArea").classList.toggle("hidden",currentView==="reservations");
+ 
+$("collectionArea").classList.toggle("hidden",currentView==="reservations"||currentView==="favorites");
+$("favoritesArea").classList.toggle("hidden",currentView!=="favorites");
+$("navFavorites").classList.toggle("active",currentView==="favorites");
+
   $("reservationArea").classList.toggle("hidden",currentView!=="reservations");
  const q=$("searchInput").value.trim(),genre=$("genreFilter").value,status=$("statusFilter").value,sort=$("sortSelect").value;
  let list=movies.filter(m=>(!q||movieMatches(m,q))&&(!genre||m.genres.includes(genre))&&(status==="all"||(status==="loaned"?m.loaned:!m.loaned)));
