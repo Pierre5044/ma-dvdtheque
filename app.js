@@ -66,6 +66,8 @@ $("collectionArea").classList.toggle("hidden",currentView==="reservations"||curr
 $("favoritesArea").classList.toggle("hidden",currentView!=="favorites");
 $("navFavorites").classList.toggle("active",currentView==="favorites");
 
+if(currentView==="favorites")renderFavorites();
+
   $("reservationArea").classList.toggle("hidden",currentView!=="reservations");
  const q=$("searchInput").value.trim(),genre=$("genreFilter").value,status=$("statusFilter").value,sort=$("sortSelect").value;
  let list=movies.filter(m=>(!q||movieMatches(m,q))&&(!genre||m.genres.includes(genre))&&(status==="all"||(status==="loaned"?m.loaned:!m.loaned)));
