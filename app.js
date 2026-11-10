@@ -269,31 +269,9 @@ async function clearCompletedReservationLink(m){
  }else if(films[0].reservation_id!==null){
   throw new Error('Le DVD est lié à une autre réservation.');
  }
-
  await saveMovie({...m,reservationId:null});
 }
-
-
- const saved=await supabaseRequest(
-  '/rest/v1/films?id=eq.'+encodeURIComponent(m.id)+
-  '&reservation_id=eq.'+encodeURIComponent(id)+
-  '&est_prete=eq.false',
-  {
-   method:'PATCH',
-   headers:{Prefer:'return=representation'},
-   body:JSON.stringify({reservation_id:null})
-  }
- );
-
- if(!Array.isArray(saved)||saved.length!==1){
-  throw new Error('Nettoyage du lien non confirmé.');
- }
-
- const updated={...m,reservationId:null};
- await saveMovie(updated);
-}
-
-async function retryReturnedReservations(){
+ async function retryReturnedReservations(){
  if(!await ensureAdminSession())return;
 
  const pending=movies.filter(m=>
