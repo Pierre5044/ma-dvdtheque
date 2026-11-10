@@ -762,7 +762,29 @@ $("movieGrid").addEventListener("click",e=>{
 });
 
  $("movieGrid").addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("movie-card")){e.preventDefault();showDetails(e.target.dataset.id)}});
- $("movieForm").addEventListener("submit",submitMovie);
+ 
+$("favoritesGrid").addEventListener("click",e=>{
+  const favoriteButton=e.target.closest(".favorite-btn");
+
+  if(favoriteButton){
+    e.stopPropagation();
+    toggleFavorite(favoriteButton.dataset.favoriteId);
+    return;
+  }
+
+  const card=e.target.closest(".movie-card");
+  if(card)showDetails(card.dataset.id);
+});
+
+$("favoritesGrid").addEventListener("keydown",e=>{
+  if((e.key==="Enter"||e.key===" ") &&
+     e.target.classList.contains("movie-card")){
+    e.preventDefault();
+    showDetails(e.target.dataset.id);
+  }
+});
+
+  $("movieForm").addEventListener("submit",submitMovie);
  $("movieLoaned").addEventListener("change",()=> $("loanFields").classList.toggle("hidden",!$("movieLoaned").checked));
  $("navCollection").onclick=()=>{currentView="collection";$("statusFilter").value="all";render();window.scrollTo({top:0,behavior:"smooth"})};
   
