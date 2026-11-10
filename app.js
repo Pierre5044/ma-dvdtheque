@@ -667,6 +667,13 @@ function wire(){
  $("movieForm").addEventListener("submit",submitMovie);
  $("movieLoaned").addEventListener("change",()=> $("loanFields").classList.toggle("hidden",!$("movieLoaned").checked));
  $("navCollection").onclick=()=>{currentView="collection";$("statusFilter").value="all";render();window.scrollTo({top:0,behavior:"smooth"})};
+  
+$("navFavorites").onclick=()=>{
+  currentView="favorites";
+  render();
+  window.scrollTo({top:0,behavior:"smooth"});
+};
+
  $("navReservations").onclick=()=>{currentView="reservations";render();showReservationPanels();if(adminSession)loadReservations();window.scrollTo({top:0,behavior:"smooth"})};
   $("reservationSettings").onclick=()=>$("settingsBtn").click();
   $("reservationLogin").addEventListener("submit",loginAdmin);
