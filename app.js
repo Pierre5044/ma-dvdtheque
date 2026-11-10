@@ -95,6 +95,46 @@ ${m.loaned?'<span class="loan-badge">PRÊTÉ</span>':""}
  $("navCollection").classList.toggle("active",currentView==="collection");$("navReservations").classList.toggle("active",currentView==="reservations");$("navLoans").classList.toggle("active",currentView==="loans");
  $("navAdd").classList.remove("active");$("navBackup").classList.remove("active");
 }
+  
+function renderFavorites(){
+  const favorites = getFavorites();
+  const list = movies.filter(m => favorites.includes(String(m.id)));
+
+  $("favoritesCount").textContent =
+    `${list.length} film${list.length > 1 ? "s" : ""}`;
+
+  $("favoritesGrid").innerHTML = list.map(m => `
+    <article class="movie-card"
+      data-id="${esc(m.id)}"
+      tabindex="0"
+      aria-label="${esc(m.title)}">
+
+      <div class="poster-wrap">
+        ${m.poster
+          ? `<img class="poster" loading="lazy"
+              src="${esc(m.poster)}"
+              alt="Affiche de ${esc(m.title)}">`
+          : `<div class="poster-placeholder">🎬</div>`}
+
+        <button type="button" class="favorite-btn"
+          data-favorite-id="${esc(m.id)}"
+          aria-label="Retirer des favoris"
+          aria-pressed="true">❤️</button>
+      </div>
+
+      <div class="card-body">
+        <h3 class="card-title">${esc(m.title)}</h3>
+        <div class="card-meta">${esc(m.year || "Année inconnue")}</div>
+      </div>
+    </article>
+  `).join("");
+
+  if(list.length === 0){
+    $("favoritesGrid").innerHTML =
+      '<p class="muted">Aucun favori pour le moment. Ajoute des films en appuyant sur ♡ dans ta collection.</p>';
+  }
+}
+
 async function refresh(){movies=(await allMovies()).map(normalizeMovie);render()}
 function formMovie(m={}){
  formTmdbId=m.tmdbId||"";
