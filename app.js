@@ -75,7 +75,15 @@ $("navFavorites").classList.toggle("active",currentView==="favorites");
  $("genreCount").textContent=new Set(movies.flatMap(m=>m.genres)).size;
  $("resultCount").textContent=`${list.length} résultat${list.length>1?"s":""}`;
  $("movieGrid").innerHTML=list.map(m=>`<article class="movie-card" data-id="${esc(m.id)}" tabindex="0" aria-label="${esc(m.title)}">
-  <div class="poster-wrap">${m.poster?`<img class="poster" loading="lazy" src="${esc(m.poster)}" alt="Affiche de ${esc(m.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">`:""}<div class="poster-placeholder" style="display:${m.poster?"none":"grid"}">🎬</div>${m.loaned?'<span class="loan-badge">PRÊTÉ</span>':""}</div>
+  <div class="poster-wrap">${m.poster?`<img class="poster" loading="lazy" src="${esc(m.poster)}" alt="Affiche de ${esc(m.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">`:""}<div class="poster-placeholder" style="display:${m.poster?"none":"grid"}">🎬</div>
+${m.loaned?'<span class="loan-badge">PRÊTÉ</span>':""}
+<button type="button" class="favorite-btn"
+  data-favorite-id="${esc(m.id)}"
+  aria-label="${isFavorite(m.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}"
+  aria-pressed="${isFavorite(m.id)}">
+  ${isFavorite(m.id) ? '❤️' : '♡'}
+</button></div>
+
   <div class="card-body"><h3 class="card-title">${esc(m.title)}</h3><div class="card-meta">${esc(m.year||"Année inconnue")}${m.director?" · "+esc(m.director):""}</div><div class="card-genres">${m.genres.slice(0,2).map(g=>`<span class="chip">${esc(g)}</span>`).join("")}</div></div></article>`).join("");
  $("emptyState").classList.toggle("visible",list.length===0);
  $("movieGrid").style.display=list.length?"grid":"none";
