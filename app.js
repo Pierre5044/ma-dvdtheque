@@ -890,7 +890,26 @@ $("navFavorites").onclick=()=>{
   $("reservationRefresh").onclick=loadReservations;
   if($("syncTestMovie"))$("syncTestMovie").onclick=sendTestMovieToSupabase;
   $("reservationLogout").onclick=()=>{adminSession=null;sessionStorage.removeItem("pitouAdminSession");showReservationPanels();reservationMessage("Déconnecté.")};
-  $("reservationList").addEventListener("click",e=>{const button=e.target.closest("button[data-reservation-id]");if(button)changeReservationStatus(button.dataset.reservationId,button.dataset.status)});
+  $("reservationList").addEventListener("click",e=>{const button=e.target.closest("button[data-reservation-id]");if(
+$("reservationList").addEventListener("click",e=>{
+ const cancelButton=e.target.closest("button[data-cancel-id]");
+ if(cancelButton){
+  cancelReservation(cancelButton.dataset.cancelId);
+  return;
+ }
+
+ const deleteButton=e.target.closest("button[data-delete-id]");
+ if(deleteButton){
+  deleteReservation(deleteButton.dataset.deleteId);
+  return;
+ }
+
+ const button=e.target.closest("button[data-reservation-id]");
+ if(button){
+  changeReservationStatus(button.dataset.reservationId,button.dataset.status);
+ }
+});
+button)changeReservationStatus(button.dataset.reservationId,button.dataset.status)});
   $("navLoans").onclick=()=>{currentView="loans";$("statusFilter").value="loaned";render();window.scrollTo({top:0,behavior:"smooth"})};
  const addAction=()=>{openSearch()};
  $("manualAddBtn").onclick=()=>{closeDialog($("searchDialog"));formMovie({})};
