@@ -55,7 +55,12 @@
     <p class="muted small">Espace administrateur privé. Les demandes proviennent de la page familiale.</p>
     <div id="reservationConfig" class="reservation-panel hidden"><p>Configure d’abord la clé publique Supabase dans ⚙ Paramètres.</p><button id="reservationSettings" class="secondary">Ouvrir les paramètres</button></div>
     <form id="reservationLogin" class="reservation-panel hidden"><h3>Connexion administrateur</h3><label>Adresse e-mail<input id="adminEmail" type="email" required autocomplete="username" value="pplace@hotmail.fr"></label><label>Mot de passe<input id="adminPassword" type="password" required autocomplete="current-password"></label><button type="submit" class="primary">Se connecter</button></form>
-    <div id="reservationDashboard" class="hidden"><div class="reservation-controls"><button id="reservationRefresh" class="secondary">↻ Actualiser</button><button id="reservationLogout" class="secondary">Se déconnecter</button></div><div id="reservationList" class="reservation-list"></div></div>
+    <div id="reservationDashboard" class="hidden"><div class="reservation-controls"><button id="reservationRefresh" class="secondary">↻ Actualiser</button><button id="reservationLogout" class="secondary">Se déconnecter</button></div><div class="reservation-panel">
+      <h3>Notifications de réservation</h3>
+      <p class="muted small">Active les notifications sur cet appareil pour être averti des nouvelles demandes.</p>
+      <button type="button" id="activatePush" class="primary">🔔 Activer les notifications</button>
+      <p id="pushStatus" class="form-message" role="status">Appuie pour activer ou vérifier ton abonnement.</p>
+    </div><div id="reservationList" class="reservation-list"></div></div>
     <p id="reservationMessage" class="form-message" role="status"></p>
   </section>
 </main>
@@ -145,7 +150,7 @@
 <footer class="attribution">Données de films : TMDB lorsque configuré. Cette application n’est ni approuvée ni certifiée par TMDB.</footer>
 
 
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 
 
 </body>

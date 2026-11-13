@@ -9,6 +9,7 @@ let pendingBarcode="", barcodeLookupActive=false;
 const defaultGenres=["Action","Aventure","Animation","Biopic","Comédie","Drame","Fantastique","Guerre","Historique","Horreur","Policier","Romance","Science-fiction","Thriller","Western","Documentaire","Famille","Musical"];
 const SUPABASE_URL="https://srkgplvybjxqzwjckwwf.supabase.co";
 const ADMIN_UID="85afca10-69d2-4601-a8e1-829cf90dade2";
+const VAPID_PUBLIC_KEY="BAd1VPFtibWdVD8p5h31WJh3OENe1GuDmJQrNfCQXt30X1kpqjp5dvNI7xoaZ19PgvtKjplMeiBwB_9sUimcSds";
 let adminSession=null;
 let publicFilmTitles={};
 const dialogs=["movieDialog","searchDialog","scanDialog","detailsDialog","settingsDialog","backupDialog"].map($);
@@ -662,6 +663,42 @@ async function ensureAdminSession(){
   sessionStorage.setItem("pitouAdminSession",JSON.stringify(adminSession));return true;
  }catch{adminSession=null;sessionStorage.removeItem("pitouAdminSession");showReservationPanels();reservationMessage("Session expirée : reconnecte-toi.");return false}
 }
+async function activatePushNotifications(){
+ const button=$("activatePush");
+ const status=$("pushStatus");
+ button.disabled=true;
+ try{
+  if(!adminSession)throw new Error("Connecte-toi comme administrateur.");
+  if(!("Notification" in window)||!("serviceWorker" in navigator)||!("PushManager" in window))throw new Error("Notifications non prises en charge sur cet appareil.");
+  const permission=await Notification.requestPermission();
+  if(permission!=="granted")throw new Error("Autorisation non accordée. Vérifie les paramètres de notifications du navigateur.");
+  status.textContent="Activation en cours…";
+  if(!await ensureAdminSession())throw new Error("Reconnecte-toi comme administrateur.");
+  const registration=await Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>setTimeout(()=>reject(new Error("Service worker indisponible. Rouvre l’application.")),12000))]);
+  const key=Uint8Array.from(atob(VAPID_PUBLIC_KEY.replace(/-/g,"+").replace(/_/g,"/")+"="),c=>c.charCodeAt(0));
+  let subscription=await registration.pushManager.getSubscription();
+  if(subscription){
+   const oldKey=subscription.options.applicationServerKey;
+   if(!oldKey||new Uint8Array(oldKey).length!==key.length||!new Uint8Array(oldKey).every((v,i)=>v===key[i])){
+    await subscription.unsubscribe();
+    subscription=null;
+   }
+  }
+  if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+  const data=subscription.toJSON();
+  if(!data.endpoint||!data.keys?.p256dh||!data.keys?.auth)throw new Error("Abonnement incomplet.");
+  if(!await ensureAdminSession())throw new Error("Reconnecte-toi comme administrateur.");
+  const saved=await supabaseRequest("/rest/v1/push_subscriptions?on_conflict=endpoint",{
+   method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},
+   body:JSON.stringify({user_id:ADMIN_UID,endpoint:data.endpoint,p256dh:data.keys.p256dh,auth:data.keys.auth})
+  });
+  if(!Array.isArray(saved)||saved.length!==1)throw new Error("Abonnement non confirmé par Supabase.");
+  status.textContent="Notifications activées sur cet appareil.";
+  button.textContent="🔔 Réactiver les notifications";
+ }catch(error){status.textContent="Activation impossible : "+error.message;}
+ finally{button.disabled=false;}
+}
+
 async function loginAdmin(event){
  event.preventDefault();reservationMessage("Connexion en cours…");
  try{
@@ -888,6 +925,7 @@ $("navFavorites").onclick=()=>{
   $("reservationSettings").onclick=()=>$("settingsBtn").click();
   $("reservationLogin").addEventListener("submit",loginAdmin);
   $("reservationRefresh").onclick=loadReservations;
+  if($("activatePush"))$("activatePush").onclick=activatePushNotifications;
   if($("syncTestMovie"))$("syncTestMovie").onclick=sendTestMovieToSupabase;
   $("reservationLogout").onclick=()=>{adminSession=null;sessionStorage.removeItem("pitouAdminSession");showReservationPanels();reservationMessage("Déconnecté.")};
 $("reservationList").addEventListener("click",e=>{
