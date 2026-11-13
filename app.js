@@ -741,6 +741,61 @@ async function changeReservationStatus(id,status){
  }catch(error){reservationMessage("Modification impossible : "+error.message)}
 }
 
+async function cancelReservation(id){
+ if(!await ensureAdminSession())return;
+
+ if(!confirm("Annuler cette réservation ? Le DVD pourra redevenir disponible."))return;
+
+ reservationMessage("Annulation en cours…");
+
+ try{
+  const result=await supabaseRequest(
+   "/rest/v1/reservations?id=eq."+encodeURIComponent(id)+"&statut=in.(en_attente,acceptee)",
+   {
+    method:"PATCH",
+    headers:{Prefer:"return=representation"},
+    body:JSON.stringify({statut:"annulee"})
+   }
+  );
+
+  if(!Array.isArray(result)||result.length!==1)
+   throw new Error("Réservation déjà traitée ou introuvable.");
+
+  await loadReservations();
+  toast("Réservation annulée");
+
+ }catch(error){
+  reservationMessage("Annulation impossible : "+error.message);
+ }
+}
+
+async function deleteReservation(id){
+ if(!await ensureAdminSession())return;
+
+ if(!confirm("Supprimer définitivement cette réservation ? Cette action est irréversible."))return;
+
+ reservationMessage("Suppression en cours…");
+
+ try{
+  const result=await supabaseRequest(
+   "/rest/v1/reservations?id=eq."+encodeURIComponent(id),
+   {
+    method:"DELETE",
+    headers:{Prefer:"return=representation"}
+   }
+  );
+
+  if(!Array.isArray(result)||result.length!==1)
+   throw new Error("Réservation introuvable ou suppression non autorisée.");
+
+  await loadReservations();
+  toast("Réservation supprimée");
+
+ }catch(error){
+  reservationMessage("Suppression impossible : "+error.message);
+ }
+}
+
 
 // Test contrôlé : n'envoie que le DVD fictif, jamais la collection entière.
 async function sendTestMovieToSupabase(){
