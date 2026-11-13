@@ -672,14 +672,49 @@ async function loginAdmin(event){
   showReservationPanels();await loadReservations();toast("Connecté : modifications des DVD synchronisées");
  }catch(error){reservationMessage("Connexion impossible : "+error.message)}
 }
+
 function reservationCard(r){
  const status=r.statut||"en_attente";
- const statusLabel={en_attente:"En attente",acceptee:"Acceptée",refusee:"Refusée"}[status]||status;
+ const statusLabel={
+  en_attente:"En attente",
+  acceptee:"Acceptée",
+  refusee:"Refusée",
+  annulee:"Annulée",
+  terminee:"Terminée"
+ }[status]||status;
+
  const name=[r.prenom,r.nom].filter(Boolean).join(" ");
  const movie=movies.find(m=>m.id===r.film_id);
  const title=publicFilmTitles[r.film_id]||movie?.title||"DVD n° "+r.film_id;
- return `<article class="reservation-card"><div class="reservation-card-top"><strong>${esc(title)}</strong><span class="reservation-status">${esc(statusLabel)}</span></div><p><strong>Demandeur :</strong> ${esc(name)}</p>${r.email?`<p><strong>E-mail :</strong> ${esc(r.email)}</p>`:""}${r.message?`<p><strong>Message :</strong> ${esc(r.message)}</p>`:""}<p class="muted small">${esc(new Date(r.created_at).toLocaleString("fr-FR"))}</p>${status==="en_attente"?`<div class="reservation-actions"><button type="button" class="primary" data-reservation-id="${esc(r.id)}" data-status="acceptee">Accepter</button><button type="button" class="danger-button" data-reservation-id="${esc(r.id)}" data-status="refusee">Refuser</button></div>`:""}</article>`;
+
+ return `<article class="reservation-card">
+ <div class="reservation-card-top">
+ <strong>${esc(title)}</strong>
+ <span class="reservation-status">${esc(statusLabel)}</span>
+ </div>
+
+ <p><strong>Demandeur :</strong> ${esc(name)}</p>
+ ${r.email?`<p><strong>E-mail :</strong> ${esc(r.email)}</p>`:""}
+ ${r.message?`<p><strong>Message :</strong> ${esc(r.message)}</p>`:""}
+ <p class="muted small">${esc(new Date(r.created_at).toLocaleString("fr-FR"))}</p>
+
+ <div class="reservation-actions">
+
+ ${status==="en_attente"?`
+ <button type="button" class="primary" data-reservation-id="${esc(r.id)}" data-status="acceptee">Accepter</button>
+ <button type="button" class="danger-button" data-reservation-id="${esc(r.id)}" data-status="refusee">Refuser</button>
+ `:""}
+
+ ${["en_attente","acceptee"].includes(status)?`
+ <button type="button" class="secondary" data-cancel-id="${esc(r.id)}">Annuler</button>
+ `:""}
+
+ <button type="button" class="danger-button" data-delete-id="${esc(r.id)}">Supprimer</button>
+
+ </div>
+ </article>`;
 }
+
 async function loadReservations(){
 
 if(!await ensureAdminSession())return;
